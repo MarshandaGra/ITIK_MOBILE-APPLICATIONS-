@@ -43,9 +43,12 @@ class SiswaHomeScreen extends StatelessWidget {
 
     // Antisipasi: nama kosong / hanya spasi
     final namaTrim = user.nama.trim();
-    final namaDepan = namaTrim.isEmpty ? 'Siswa' : namaTrim.split(RegExp(r'\s+')).first;
+    final namaDepan =
+        namaTrim.isEmpty ? 'Siswa' : namaTrim.split(RegExp(r'\s+')).first;
     final kelas = (user.kelas ?? '').trim();
-    final infoKelas = kelas.isEmpty ? 'Semester Ganjil 2026' : '$kelas • Semester Ganjil 2026';
+    final infoKelas = kelas.isEmpty
+        ? 'Semester Ganjil 2026'
+        : '$kelas • Semester Ganjil 2026';
 
     return Scaffold(
       body: SafeArea(
@@ -101,22 +104,37 @@ class SiswaHomeScreen extends StatelessWidget {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.white24,
-                                      child: Text(
-                                        user.initials,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-                                      ),
+                                      backgroundImage: user.foto != null
+                                          ? MemoryImage(user.foto!)
+                                          : null,
+                                      child: user.foto != null
+                                          ? null
+                                          : Text(
+                                              user.initials,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          const Text('Halo,', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                          const Text('Halo,',
+                                              style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 12)),
                                           Text(
                                             '$namaDepan!',
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5),
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14.5),
                                           ),
                                         ],
                                       ),
@@ -124,30 +142,43 @@ class SiswaHomeScreen extends StatelessWidget {
                                   ]),
                                 ),
                                 const SizedBox(width: 8),
-                                _BellButton(count: tugasRemedial == null ? 0 : 1),
+                                _BellButton(
+                                    count: tugasRemedial == null ? 0 : 1),
                               ],
                             ),
                             const SizedBox(height: 18),
                             const Text(
                               'Terus tingkatkan kemampuan TIK-mu 🚀',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               infoKelas,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12.5),
                             ),
                             const SizedBox(height: 18),
                             // ===== 3 KARTU STATISTIK di dalam area biru =====
                             Row(
                               children: [
-                                Expanded(child: _StatCard(value: '$totalMateri', label: 'Materi')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$totalMateri',
+                                        label: 'Materi')),
                                 const SizedBox(width: 10),
-                                Expanded(child: _StatCard(value: '$totalKuis', label: 'Kuis Tersedia')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$totalKuis',
+                                        label: 'Kuis Tersedia')),
                                 const SizedBox(width: 10),
-                                Expanded(child: _StatCard(value: '$pct%', label: 'Progres')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$pct%', label: 'Progres')),
                               ],
                             ),
                           ],
@@ -175,20 +206,24 @@ class SiswaHomeScreen extends StatelessWidget {
                       action: SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.red),
                           onPressed: () {
                             final kuis = app.kuisById(tugasRemedial.kuisId);
                             if (kuis == null) {
                               // Antisipasi: kuis sudah dihapus guru
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Kuis remedial tidak ditemukan.')),
+                                const SnackBar(
+                                    content:
+                                        Text('Kuis remedial tidak ditemukan.')),
                               );
                               return;
                             }
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => KuisPlayScreen(kuis: kuis, remedialOfId: tugasRemedial.id),
+                                builder: (_) => KuisPlayScreen(
+                                    kuis: kuis, remedialOfId: tugasRemedial.id),
                               ),
                             );
                           },
@@ -203,7 +238,8 @@ class SiswaHomeScreen extends StatelessWidget {
                     linkText: 'Lihat Semua',
                     onLinkTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const SiswaMateriScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const SiswaMateriScreen()),
                     ),
                   ),
                   if (materiBelum.isEmpty)
@@ -228,10 +264,13 @@ class SiswaHomeScreen extends StatelessWidget {
                         title: '${m.bab} — ${m.judul}',
                         subtitle:
                             '${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
-                        trailing: const Icon(Icons.chevron_right, color: AppColors.muted, size: 20),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppColors.muted, size: 20),
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => MateriDetailScreen(materiId: m.id)),
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  MateriDetailScreen(materiId: m.id)),
                         ),
                       ),
                     ),
@@ -242,7 +281,8 @@ class SiswaHomeScreen extends StatelessWidget {
                     linkText: 'Lihat Semua',
                     onLinkTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const KuisLevelScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const KuisLevelScreen()),
                     ),
                   ),
                   if (kuisBelum.isEmpty)
@@ -266,10 +306,12 @@ class SiswaHomeScreen extends StatelessWidget {
                         iconBg: AppColors.orange.withOpacity(0.12),
                         title: k.judul,
                         subtitle: '${k.soal.length} soal • ${k.level}',
-                        trailing: const Icon(Icons.chevron_right, color: AppColors.muted, size: 20),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppColors.muted, size: 20),
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => KuisPlayScreen(kuis: k)),
+                          MaterialPageRoute(
+                              builder: (_) => KuisPlayScreen(kuis: k)),
                         ),
                       ),
                     ),
@@ -297,7 +339,8 @@ class _StatCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+              color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -307,7 +350,10 @@ class _StatCard extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.black87),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Colors.black87),
             ),
           ),
           const SizedBox(height: 2),
@@ -343,7 +389,8 @@ class _BellButton extends StatelessWidget {
             color: Colors.white24,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 20),
+          child: const Icon(Icons.notifications_none_rounded,
+              color: Colors.white, size: 20),
         ),
         if (count > 0)
           Positioned(
@@ -352,7 +399,8 @@ class _BellButton extends StatelessWidget {
             child: Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(color: AppColors.red, shape: BoxShape.circle),
+              decoration: const BoxDecoration(
+                  color: AppColors.red, shape: BoxShape.circle),
             ),
           ),
       ]),

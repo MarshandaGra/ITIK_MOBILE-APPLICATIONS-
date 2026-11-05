@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
+import '../../providers/a11y_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'materi_detail_screen.dart';
@@ -25,11 +26,24 @@ class SiswaMateriScreen extends StatelessWidget {
                   iconColor: AppColors.red,
                   iconBg: AppColors.redLight,
                   title: '${m.bab} — ${m.judul}',
-                  subtitle: '${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
+                  subtitle:
+                      '${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
                   trailing: app.isMateriSelesai(m.id)
-                      ? const Icon(Icons.check_circle, color: AppColors.green, size: 20)
-                      : const Icon(Icons.chevron_right, color: AppColors.muted, size: 20),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MateriDetailScreen(materiId: m.id))),
+                      ? const Icon(Icons.check_circle,
+                          color: AppColors.green, size: 20)
+                      : const Icon(Icons.chevron_right,
+                          color: AppColors.muted, size: 20),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                MateriDetailScreen(materiId: m.id)));
+                    final a11y = context.read<A11yProvider>();
+                    if (a11y.autoRead) {
+                      a11y.speakPage('${m.bab}. ${m.judul}.');
+                    }
+                  },
                 )),
           ],
         ),

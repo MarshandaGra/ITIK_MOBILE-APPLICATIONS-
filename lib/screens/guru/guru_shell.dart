@@ -7,9 +7,6 @@ import 'kuis_kelola_screen.dart';
 import 'guru_validasi_screen.dart';
 
 /// Bingkai (shell) dengan bottom navigation untuk akun Guru.
-/// Guru berbagi layar kelola Materi & Kuis dengan yang dipakai operator di
-/// prototipe asli (guru diberi akses penuh, sesuai perilaku SCREEN_ROLES
-/// pada prototipe: `operatorMateri`/`operatorKuis` juga bisa diakses guru).
 class GuruShell extends StatefulWidget {
   const GuruShell({super.key});
 

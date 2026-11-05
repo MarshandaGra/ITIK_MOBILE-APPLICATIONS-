@@ -44,16 +44,141 @@ class RoleColors {
 const double kRadius = 18;
 final kCardShadow = [
   BoxShadow(
-    color: const Color(0xFF14163C).withOpacity(.08),
+    color: const Color(0xFF14163C).withValues(alpha: .08),
     blurRadius: 28,
     offset: const Offset(0, 12),
   ),
 ];
 
 class AppTheme {
+  static ThemeData highContrastLight() {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorSchemeSeed: AppColors.blue,
+    );
+    final textTheme =
+        GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+      bodyColor: Colors.black,
+      displayColor: Colors.black,
+    );
+    return base.copyWith(
+      scaffoldBackgroundColor: Colors.white,
+      textTheme: textTheme,
+      colorScheme: const ColorScheme.light(
+        primary: Colors.black,
+        secondary: Colors.black,
+        surface: Colors.white,
+        error: Color(0xFFB00020),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.yellow,
+        foregroundColor: Colors.black,
+      ),
+    );
+  }
+
+  static ThemeData highContrastDark() {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorSchemeSeed: AppColors.blue,
+    );
+    final textTheme =
+        GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+      bodyColor: Colors.white,
+      displayColor: Colors.white,
+    );
+    return base.copyWith(
+      scaffoldBackgroundColor: Colors.black,
+      textTheme: textTheme,
+      colorScheme: const ColorScheme.dark(
+        primary: Colors.yellow,
+        secondary: Colors.yellow,
+        surface: Color(0xFF111111),
+        error: Color(0xFFFF8A80),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.yellow,
+      ),
+    );
+  }
+
+  static ThemeData dark() {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorSchemeSeed: AppColors.blue,
+    );
+    final textTheme =
+        GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+      bodyColor: const Color(0xFFF4F6FF),
+      displayColor: const Color(0xFFF4F6FF),
+    );
+    const surface = Color(0xFF1B2130);
+    const scaffold = Color(0xFF10141F);
+
+    return base.copyWith(
+      scaffoldBackgroundColor: scaffold,
+      textTheme: textTheme,
+      colorScheme: base.colorScheme.copyWith(
+        primary: const Color(0xFF6F9EFF),
+        secondary: AppColors.purple,
+        surface: surface,
+        error: const Color(0xFFFF7B7F),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: scaffold,
+        foregroundColor: Color(0xFFF4F6FF),
+        elevation: 0,
+        centerTitle: false,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF343C50)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF343C50)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF6F9EFF), width: 1.5),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF477EF0),
+          foregroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(50),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF8EADFF),
+          minimumSize: const Size.fromHeight(50),
+          side: const BorderSide(color: Color(0xFF477EF0)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), 
+        ),
+      ),
+      dividerTheme:
+          const DividerThemeData(color: Color(0xFF343C50), thickness: 1),
+    );
+  }
+
   static ThemeData light() {
     final base = ThemeData(useMaterial3: true, colorSchemeSeed: AppColors.blue);
-    final textTheme = GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
+    final textTheme =
+        GoogleFonts.plusJakartaSansTextTheme(base.textTheme).apply(
       bodyColor: AppColors.text,
       displayColor: AppColors.text,
     );
@@ -81,7 +206,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppColors.border),
@@ -101,8 +227,10 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(50),
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
           elevation: 0,
         ),
       ),
@@ -111,12 +239,15 @@ class AppTheme {
           foregroundColor: AppColors.blue,
           minimumSize: const Size.fromHeight(50),
           side: const BorderSide(color: AppColors.blueLight, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
           backgroundColor: Colors.white,
         ),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+          color: AppColors.border, thickness: 1, space: 1),
     );
   }
 }
@@ -140,19 +271,24 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? AppColors.card,
-        borderRadius: BorderRadius.circular(kRadius),
-        border: Border.all(color: borderColor ?? AppColors.border),
-        boxShadow: color == null ? kCardShadow : null,
-      ),
-      child: child,
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(kRadius),
+      side: BorderSide(color: borderColor ?? AppColors.border),
     );
-    if (onTap == null) return content;
-    return InkWell(
-      onTap: onTap,
+    final content = Material(
+      color: color ?? AppColors.card,
+      shape: shape,
+      elevation: color == null ? 2 : 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(kRadius),
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+    return ClipRRect(
       borderRadius: BorderRadius.circular(kRadius),
       child: content,
     );
@@ -164,16 +300,22 @@ class AppPill extends StatelessWidget {
   final String label;
   final Color color;
   final Color background;
-  const AppPill({super.key, required this.label, required this.color, required this.background});
+  const AppPill(
+      {super.key,
+      required this.label,
+      required this.color,
+      required this.background});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+          color: background, borderRadius: BorderRadius.circular(999)),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w700),
+        style: TextStyle(
+            color: color, fontSize: 11.5, fontWeight: FontWeight.w700),
       ),
     );
   }

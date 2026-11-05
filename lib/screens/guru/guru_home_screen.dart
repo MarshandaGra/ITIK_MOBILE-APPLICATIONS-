@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/user.dart';
+import '../../models/hasil_kuis.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../shared/notifikasi_screen.dart';
@@ -22,10 +23,13 @@ class GuruHomeScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final pending = app.menungguValidasi.length;
+    // Yang lulus otomatis valid, jadi hanya hitung yang di bawah KKM & belum divalidasi
+    final pending = app.hasilList
+        .where((h) => h.dibawahKkm && h.status != StatusValidasi.divalidasi)
+        .length;
     // CATATAN: "+ 2" dari kode aslimu dipertahankan (sepertinya penyesuaian data dummy).
-    // Hapus kalau jumlah siswa sudah diambil sepenuhnya dari data asli.
-    final totalSiswa = app.users.where((u) => u.role == UserRole.siswa).length + 2;
+    final totalSiswa =
+        app.users.where((u) => u.role == UserRole.siswa).length + 2;
     final totalKuis = app.kuisList.length;
     final totalMateri = app.materiList.length;
 
@@ -86,22 +90,37 @@ class GuruHomeScreen extends StatelessWidget {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.white24,
-                                      child: Text(
-                                        user.initials,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-                                      ),
+                                      backgroundImage: user.foto != null
+                                          ? MemoryImage(user.foto!)
+                                          : null,
+                                      child: user.foto != null
+                                          ? null
+                                          : Text(
+                                              user.initials,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          const Text('Dashboard', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                          const Text('Dashboard',
+                                              style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 12)),
                                           Text(
                                             nama,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14.5),
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14.5),
                                           ),
                                         ],
                                       ),
@@ -115,22 +134,33 @@ class GuruHomeScreen extends StatelessWidget {
                             const SizedBox(height: 18),
                             const Text(
                               'Pantau perkembangan siswa Anda',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 2),
                             const Text(
                               'Guru Pengampu TIK',
-                              style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 12.5),
                             ),
                             const SizedBox(height: 18),
                             // ===== 3 KARTU STATISTIK di dalam area hijau =====
                             Row(
                               children: [
-                                Expanded(child: _StatCard(value: '$totalSiswa', label: 'Siswa')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$totalSiswa', label: 'Siswa')),
                                 const SizedBox(width: 10),
-                                Expanded(child: _StatCard(value: '$totalKuis', label: 'Kuis')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$totalKuis', label: 'Kuis')),
                                 const SizedBox(width: 10),
-                                Expanded(child: _StatCard(value: '$pending', label: 'Perlu Validasi')),
+                                Expanded(
+                                    child: _StatCard(
+                                        value: '$pending',
+                                        label: 'Perlu Validasi')),
                               ],
                             ),
                           ],
@@ -156,7 +186,8 @@ class GuruHomeScreen extends StatelessWidget {
                     subtitle: '$pending nilai menunggu validasi',
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const GuruValidasiScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const GuruValidasiScreen()),
                     ),
                   ),
                   AppListItem(
@@ -167,7 +198,8 @@ class GuruHomeScreen extends StatelessWidget {
                     subtitle: '$totalMateri materi PDF tersedia',
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const MateriKelolaScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const MateriKelolaScreen()),
                     ),
                   ),
                   AppListItem(
@@ -178,7 +210,8 @@ class GuruHomeScreen extends StatelessWidget {
                     subtitle: '$totalKuis kuis dapat diedit atau dihapus',
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const KuisKelolaScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const KuisKelolaScreen()),
                     ),
                   ),
                 ]),
@@ -205,7 +238,8 @@ class _StatCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+              color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -215,7 +249,10 @@ class _StatCard extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.black87),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Colors.black87),
             ),
           ),
           const SizedBox(height: 2),
@@ -251,7 +288,8 @@ class _BellButton extends StatelessWidget {
             color: Colors.white24,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 20),
+          child: const Icon(Icons.notifications_none_rounded,
+              color: Colors.white, size: 20),
         ),
         if (showDot)
           const Positioned(

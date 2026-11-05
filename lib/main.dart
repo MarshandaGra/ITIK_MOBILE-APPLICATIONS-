@@ -27,12 +27,21 @@ class EdukasiTikApp extends StatelessWidget {
           return MaterialApp(
             title: 'Edukasi TIK',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.light(),
+            theme: a11y.highContrast
+                ? AppTheme.highContrastLight()
+                : AppTheme.light(),
+            darkTheme: a11y.highContrast
+                ? AppTheme.highContrastDark()
+                : AppTheme.dark(),
+            themeMode: a11y.darkTheme ? ThemeMode.dark : ThemeMode.light,
+            themeAnimationDuration: Duration.zero,
+            navigatorObservers: [A11yRouteObserver(a11y)],
             builder: (context, child) {
               // Terapkan skala ukuran teks global sesuai pengaturan aksesibilitas.
               final mq = MediaQuery.of(context);
               return MediaQuery(
-                data: mq.copyWith(textScaler: TextScaler.linear(a11y.fontScale)),
+                data:
+                    mq.copyWith(textScaler: TextScaler.linear(a11y.fontScale)),
                 child: child!,
               );
             },
@@ -53,7 +62,14 @@ class AuthGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    if (!app.sessionInitialized) {
+      return const Scaffold(
+        body: SizedBox.shrink(),
+      );
+    }
     if (!app.isLoggedIn) return const LoginScreen();
-    return app.currentUser!.role == UserRole.siswa ? const SiswaShell() : const GuruShell();
+    return app.currentUser!.role == UserRole.siswa
+        ? const SiswaShell()
+        : const GuruShell();
   }
 }

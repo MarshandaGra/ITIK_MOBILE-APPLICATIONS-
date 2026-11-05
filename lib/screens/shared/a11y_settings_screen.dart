@@ -47,6 +47,42 @@ class A11ySettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
+            // ---------------- Tema ----------------
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Tema Aplikasi',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 13.5)),
+                  const SizedBox(height: 4),
+                  const Text('Pilih tampilan terang atau gelap.',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Terang')),
+                          selected: !a11y.darkTheme,
+                          onSelected: (_) => a11y.setDarkTheme(false),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: const Center(child: Text('Gelap')),
+                          selected: a11y.darkTheme,
+                          onSelected: (_) => a11y.setDarkTheme(true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
             // ---------------- Kontras Tinggi ----------------
             AppCard(
               child: Row(

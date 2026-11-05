@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Peran pengguna. Operator sengaja TIDAK disertakan di aplikasi mobile ini
 /// (operator hanya tersedia di website admin) — sesuai kesepakatan scope.
 enum UserRole { siswa, guru }
@@ -5,19 +7,21 @@ enum UserRole { siswa, guru }
 extension UserRoleX on UserRole {
   String get label => this == UserRole.siswa ? 'Siswa' : 'Guru';
 
-  static UserRole fromString(String v) => v == 'guru' ? UserRole.guru : UserRole.siswa;
+  static UserRole fromString(String v) =>
+      v == 'guru' ? UserRole.guru : UserRole.siswa;
 
   String get value => this == UserRole.siswa ? 'siswa' : 'guru';
 }
 
 class AppUser {
   final String id;
-  final String nama;
-  final String email;
-  final String password;
+  String nama;
+  String email;
+  String password;
   final UserRole role;
   final String? kelas;
-  final String? induk; // NIS, khusus siswa
+  String? induk; // NISN untuk siswa, NIP untuk guru
+  Uint8List? foto;
 
   AppUser({
     required this.id,
@@ -27,6 +31,7 @@ class AppUser {
     required this.role,
     this.kelas,
     this.induk,
+    this.foto,
   });
 
   String get initials {

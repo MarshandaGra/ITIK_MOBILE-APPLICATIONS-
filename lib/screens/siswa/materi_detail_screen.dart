@@ -1,19 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
+import '../../providers/a11y_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
-class MateriDetailScreen extends StatelessWidget {
+class MateriDetailScreen extends StatefulWidget {
   final String materiId;
   const MateriDetailScreen({super.key, required this.materiId});
 
   @override
+  State<MateriDetailScreen> createState() => _MateriDetailScreenState();
+}
+
+class _MateriDetailScreenState extends State<MateriDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final a11y = context.read<A11yProvider>();
+      if (!a11y.autoRead) return;
+      final materi = context.read<AppProvider>().materiById(widget.materiId);
+      if (materi != null) {
+        a11y.speakPage('${materi.bab}. ${materi.judul}. ${materi.deskripsi}');
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final m = app.materiById(materiId);
+    final m = app.materiById(widget.materiId);
     if (m == null) {
-      return const Scaffold(body: Center(child: Text('Materi tidak ditemukan')));
+      return const Scaffold(
+          body: Center(child: Text('Materi tidak ditemukan')));
     }
     final done = app.isMateriSelesai(m.id);
 
@@ -23,13 +44,17 @@ class MateriDetailScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
           children: [
-            Text(m.judul, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            Text(m.judul,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 3),
             Text('${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
                 style: const TextStyle(fontSize: 12, color: AppColors.muted)),
             const SizedBox(height: 12),
             AppCard(
-              child: Text(m.deskripsi, style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.muted)),
+              child: Text(m.deskripsi,
+                  style: const TextStyle(
+                      fontSize: 13, height: 1.6, color: AppColors.muted)),
             ),
             const SizedBox(height: 12),
             // Placeholder pratinjau PDF — sambungkan ke viewer PDF (mis. paket
@@ -46,9 +71,15 @@ class MateriDetailScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.picture_as_pdf_rounded, color: AppColors.red, size: 34),
+                  const Icon(Icons.picture_as_pdf_rounded,
+                      color: AppColors.red, size: 34),
                   const SizedBox(height: 8),
-                  Text(m.isi, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.5, color: AppColors.muted), maxLines: 4, overflow: TextOverflow.ellipsis),
+                  Text(m.isi,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.muted),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
@@ -60,12 +91,15 @@ class MateriDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (done)
-              AppCard(
+              const AppCard(
                 color: AppColors.greenLight,
                 borderColor: AppColors.greenLight,
-                child: const Center(
+                child: Center(
                   child: Text('✔ Progres materi ini sudah tercatat selesai',
-                      style: TextStyle(color: AppColors.green, fontWeight: FontWeight.w800, fontSize: 13.5)),
+                      style: TextStyle(
+                          color: AppColors.green,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5)),
                 ),
               )
             else

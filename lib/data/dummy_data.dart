@@ -15,7 +15,7 @@ class DummyData {
           password: '123456',
           role: UserRole.siswa,
           kelas: 'X TKJ 1',
-          induk: 'E41250266',
+          induk: '0012345678',
         ),
         AppUser(
           id: 'U2',
@@ -23,6 +23,7 @@ class DummyData {
           email: 'sari@guru.sch.id',
           password: '123456',
           role: UserRole.guru,
+          induk: '198501012010011001',
         ),
         AppUser(
           id: 'U4',
@@ -31,7 +32,7 @@ class DummyData {
           password: '123456',
           role: UserRole.siswa,
           kelas: 'X TKJ 1',
-          induk: 'E41250271',
+          induk: '0012345671',
         ),
         AppUser(
           id: 'U5',
@@ -40,7 +41,7 @@ class DummyData {
           password: '123456',
           role: UserRole.siswa,
           kelas: 'X TKJ 2',
-          induk: 'E41250284',
+          induk: '0012345684',
         ),
       ];
 

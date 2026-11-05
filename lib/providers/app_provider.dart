@@ -1,77 +1,254 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../data/dummy_data.dart';
 import '../models/user.dart';
 import '../models/materi.dart';
 import '../models/kuis.dart';
 import '../models/hasil_kuis.dart';
 
-/// Provider utama aplikasi. Menyimpan "database" dummy (di memori) beserta
-/// sesi pengguna yang sedang login, setara dengan `DB` + `S` pada prototipe.
-/// Ganti isi method-method ini dengan pemanggilan API ketika backend sudah siap.
 class AppProvider extends ChangeNotifier {
   final List<AppUser> users = DummyData.users();
   final List<Materi> materiList = DummyData.materi();
   final List<Kuis> kuisList = DummyData.kuis();
   final List<HasilKuis> hasilList = DummyData.hasil();
 
-  /// key: 'userId_materiId' -> selesai atau tidak
   final Map<String, bool> progress = {};
 
   AppUser? currentUser;
+  bool _sessionInitialized = false;
 
   bool get isLoggedIn => currentUser != null;
+  bool get sessionInitialized => _sessionInitialized;
+
+  AppProvider() {
+    unawaited(restoreSession());
+  }
+
+  Future<void> saveSession(AppUser user) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('user_id', user.id.trim());
+    await prefs.setString('user_role', user.role.name);
+
+    debugPrint(
+        'SharedPreferences disimpan: user_id=${user.id}, user_role=${user.role.name}');
+  }
+
+  Future<void> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id')?.trim();
+      final userRole = prefs.getString('user_role')?.trim();
+      debugPrint(
+          'SharedPreferences dibaca: user_id=$userId, user_role=$userRole');
+
+      if (userId == null ||
+          userId.isEmpty ||
+          (userRole != UserRole.siswa.name && userRole != UserRole.guru.name)) {
+        currentUser = null;
+        return;
+      }
+
+      UserRole? role;
+      if (userRole == UserRole.siswa.name) role = UserRole.siswa;
+      if (userRole == UserRole.guru.name) role = UserRole.guru;
+
+      currentUser = users
+          .where(
+            (user) => user.id == userId && user.role == role,
+          )
+          .firstOrNull;
+
+      if (currentUser == null) {
+        await clearSession();
+      }
+    } catch (error) {
+      debugPrint('Gagal memulihkan sesi SharedPreferences: $error');
+      currentUser = null;
+    } finally {
+      _sessionInitialized = true;
+      notifyListeners();
+    }
+  }
+
+  /// Menghapus sesi login pengguna
+  Future<void> clearSession() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove('user_id');
+    await prefs.remove('user_role');
+  }
 
   // ---------------- AUTH ----------------
-  String? login(String emailOrNama, String password) {
-    final input = emailOrNama.trim().toLowerCase();
-    if (input.isEmpty || password.isEmpty) return 'Email/Nama & kata sandi wajib diisi';
+
+  String? login(String identifier, String password, UserRole role) {
+    final input = identifier.trim();
+
+    if (input.isEmpty || password.isEmpty) {
+      return 'NISN/NIP & kata sandi wajib diisi';
+    }
+
     final match = users.where((u) =>
-        (u.email.toLowerCase() == input || u.nama.toLowerCase() == input) &&
+        u.role == role &&
+        (u.induk ?? '').trim().toLowerCase() == input.toLowerCase() &&
         u.password == password);
-    if (match.isEmpty) return 'Email/Nama atau kata sandi salah';
+
+    if (match.isEmpty) {
+      return 'NISN/NIP atau kata sandi salah';
+    }
+
     currentUser = match.first;
+    debugPrint(
+        'Login berhasil: user_id=${match.first.id}, role=${match.first.role.name}, nama=${match.first.nama}');
+
+    // Simpan sesi login menggunakan Shared Preferences
+    unawaited(saveSession(match.first));
+
     notifyListeners();
     return null;
   }
 
   String? register({
     required String nama,
-    required String email,
     required String password,
     required String konfirmasi,
     required UserRole role,
     String? kelas,
     String? induk,
   }) {
-    if (nama.trim().isEmpty || email.trim().isEmpty) return 'Nama & email wajib diisi';
-    if (password.length < 6) return 'Kata sandi wajib diisi, minimal 6 karakter';
-    if (password != konfirmasi) return 'Konfirmasi kata sandi tidak cocok';
-    final dipakai = users.any((u) => u.email.toLowerCase() == email.toLowerCase());
-    if (dipakai) return 'Email sudah terdaftar, silakan masuk';
+    if (nama.trim().isEmpty || induk == null || induk.trim().isEmpty) {
+      return role == UserRole.siswa
+          ? 'Nama & NISN wajib diisi'
+          : 'Nama & NIP wajib diisi';
+    }
+
+    if (password.length < 6) {
+      return 'Kata sandi wajib diisi, minimal 6 karakter';
+    }
+
+    if (password != konfirmasi) {
+      return 'Konfirmasi kata sandi tidak cocok';
+    }
+
+    final identifier = induk.trim();
+
+    final dipakai = users.any((u) =>
+        u.role == role &&
+        (u.induk ?? '').trim().toLowerCase() == identifier.toLowerCase());
+
+    if (dipakai) {
+      return role == UserRole.siswa
+          ? 'NISN sudah terdaftar, silakan masuk'
+          : 'NIP sudah terdaftar, silakan masuk';
+    }
+
     if (role == UserRole.siswa && (kelas == null || kelas.trim().isEmpty)) {
       return 'Kelas wajib diisi';
     }
+
     final u = AppUser(
       id: 'U${DateTime.now().millisecondsSinceEpoch}',
       nama: nama,
-      email: email,
+      email: '$identifier@sekolah.sch.id',
       password: password,
       role: role,
       kelas: role == UserRole.siswa ? kelas : null,
-      induk: role == UserRole.siswa ? (induk?.isEmpty ?? true ? '-' : induk) : null,
+      induk: identifier,
     );
+
     users.add(u);
     currentUser = u;
+
+    // Simpan sesi pengguna setelah registrasi
+    unawaited(saveSession(u));
+
     notifyListeners();
     return null;
   }
 
-  void logout() {
+  String? updateAccount({
+    required String identifier,
+    required String passwordSaatIni,
+    required String passwordBaru,
+    required String konfirmasiPassword,
+  }) {
+    final user = currentUser;
+
+    if (user == null) return 'Pengguna belum masuk';
+
+    final identifierBaru = identifier.trim();
+
+    if (identifierBaru.isEmpty) {
+      return user.role == UserRole.siswa
+          ? 'NISN wajib diisi'
+          : 'NIP wajib diisi';
+    }
+
+    final inginUbahPassword = passwordSaatIni.isNotEmpty ||
+        passwordBaru.isNotEmpty ||
+        konfirmasiPassword.isNotEmpty;
+
+    if (inginUbahPassword) {
+      if (passwordSaatIni != user.password) {
+        return 'Kata sandi saat ini salah';
+      }
+
+      if (passwordBaru.length < 6) {
+        return 'Kata sandi baru minimal 6 karakter';
+      }
+
+      if (passwordBaru != konfirmasiPassword) {
+        return 'Konfirmasi kata sandi baru tidak cocok';
+      }
+    }
+
+    final dipakai = users.any((u) =>
+        !identical(u, user) &&
+        u.role == user.role &&
+        (u.induk ?? '').trim().toLowerCase() == identifierBaru.toLowerCase());
+
+    if (dipakai) {
+      return user.role == UserRole.siswa
+          ? 'NISN sudah digunakan akun lain'
+          : 'NIP sudah digunakan akun lain';
+    }
+
+    user.induk = identifierBaru;
+    user.email = '$identifierBaru@sekolah.sch.id';
+
+    if (passwordBaru.isNotEmpty) {
+      user.password = passwordBaru;
+    }
+
+    notifyListeners();
+    return null;
+  }
+
+  /// Ganti / hapus foto profil pengguna yang sedang login.
+  /// Kirim null untuk menghapus foto.
+  void updateFoto(Uint8List? bytes) {
+    final user = currentUser;
+
+    if (user == null) return;
+
+    user.foto = bytes;
+    notifyListeners();
+  }
+
+  /// Logout dan hapus sesi dari Shared Preferences
+  Future<void> logout() async {
+    await clearSession();
+
     currentUser = null;
+    debugPrint('SharedPreferences dihapus: sesi logout berhasil');
     notifyListeners();
   }
 
   // ---------------- PROGRES MATERI (SISWA) ----------------
+
   bool isMateriSelesai(String materiId) {
     final key = '${currentUser?.id}_$materiId';
     return progress[key] == true;
@@ -79,11 +256,13 @@ class AppProvider extends ChangeNotifier {
 
   void submitProgresMateri(String materiId) {
     final key = '${currentUser?.id}_$materiId';
+
     progress[key] = true;
     notifyListeners();
   }
 
   // ---------------- HASIL / NILAI SISWA ----------------
+
   bool milikSiswaIni(HasilKuis h) => h.siswaId == currentUser?.id;
 
   List<HasilKuis> get riwayatSiswaSaatIni =>
@@ -91,22 +270,23 @@ class AppProvider extends ChangeNotifier {
 
   HasilKuis? get remedialAktifUntukSiswa {
     try {
-      return hasilList.firstWhere(
-          (h) => milikSiswaIni(h) && h.remedialDitugaskan && !h.remedialSelesai);
+      return hasilList.firstWhere((h) =>
+          milikSiswaIni(h) && h.remedialDitugaskan && !h.remedialSelesai);
     } catch (_) {
       return null;
     }
   }
 
-  List<HasilKuis> get menungguValidasi =>
-      hasilList.where((h) => h.status == StatusValidasi.menungguValidasi).toList();
+  List<HasilKuis> get menungguValidasi => hasilList
+      .where((h) => h.status == StatusValidasi.menungguValidasi)
+      .toList();
 
   HasilKuis submitHasilKuis({
     required Kuis kuis,
     required int nilai,
     required int benar,
     required int durasiDetik,
-    required List<int> jawabanSiswa, // BARU
+    required List<int> jawabanSiswa,
     String? remedialOfId,
   }) {
     final h = HasilKuis(
@@ -119,58 +299,72 @@ class AppProvider extends ChangeNotifier {
       nilai: nilai,
       kkm: kuis.kkm,
       durasi: durasiDetik,
-      benar: benar, // BARU
-      jawabanSiswa: jawabanSiswa, // BARU
+      benar: benar,
+      jawabanSiswa: jawabanSiswa,
       remedial: remedialOfId != null,
       tanggal: 'Hari ini',
     );
+
     hasilList.insert(0, h);
+
     if (remedialOfId != null) {
       final asal = hasilList.where((x) => x.id == remedialOfId);
-      if (asal.isNotEmpty) asal.first.remedialSelesai = true;
+
+      if (asal.isNotEmpty) {
+        asal.first.remedialSelesai = true;
+      }
     }
+
     notifyListeners();
     return h;
   }
 
   // ---------------- GURU: VALIDASI & REMEDIAL ----------------
+
   void validasiNilai(String hasilId) {
     final h = hasilList.firstWhere((x) => x.id == hasilId);
+
     h.status = StatusValidasi.divalidasi;
     notifyListeners();
   }
 
   void tugaskanRemedial(String hasilId) {
     final h = hasilList.firstWhere((x) => x.id == hasilId);
+
     h.remedialDitugaskan = true;
     notifyListeners();
   }
 
   void batalkanRemedial(String hasilId) {
     final h = hasilList.firstWhere((x) => x.id == hasilId);
+
     h.remedialDitugaskan = false;
     notifyListeners();
   }
 
   // ---------------- MATERI: CRUD (GURU) ----------------
+
   Materi? materiById(String id) {
     final r = materiList.where((m) => m.id == id);
+
     return r.isEmpty ? null : r.first;
   }
 
   void tambahMateri(Materi m) {
-    m.createdAt ??= DateTime.now(); // BARU: catat waktu upload
+    m.createdAt ??= DateTime.now();
+
     materiList.add(m);
     notifyListeners();
   }
 
   void editMateri(String id, Materi baru) {
     final idx = materiList.indexWhere((m) => m.id == id);
+
     if (idx != -1) {
-      // BARU: waktu upload asli tidak hilang saat materi diedit
       baru.createdAt ??= materiList[idx].createdAt;
       materiList[idx] = baru;
     }
+
     notifyListeners();
   }
 
@@ -180,25 +374,38 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ---------------- KUIS: CRUD (GURU) ----------------
+
   Kuis? kuisById(String id) {
     final r = kuisList.where((k) => k.id == id);
+
     return r.isEmpty ? null : r.first;
   }
 
   void tambahKuis(Kuis k) {
-    k.createdAt ??= DateTime.now(); // BARU: catat waktu upload
+    k.createdAt ??= DateTime.now();
+
     kuisList.add(k);
     notifyListeners();
   }
 
-  void editKuisMeta(String id, {required String judul, required String materiId, required String level, required int waktu, required int kkm}) {
+  void editKuisMeta(
+    String id, {
+    required String judul,
+    required String materiId,
+    required String level,
+    required int waktu,
+    required int kkm,
+  }) {
     final k = kuisById(id);
+
     if (k == null) return;
+
     k.judul = judul;
     k.materiId = materiId;
     k.level = level;
     k.waktu = waktu;
     k.kkm = kkm;
+
     notifyListeners();
   }
 
@@ -214,6 +421,7 @@ class AppProvider extends ChangeNotifier {
 
   void editSoal(String kuisId, int index, Soal soal) {
     final k = kuisById(kuisId);
+
     if (k != null && index >= 0 && index < k.soal.length) {
       k.soal[index] = soal;
       notifyListeners();
