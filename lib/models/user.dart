@@ -4,6 +4,12 @@ import 'dart:typed_data';
 /// (operator hanya tersedia di website admin) — sesuai kesepakatan scope.
 enum UserRole { siswa, guru }
 
+abstract final class MataPelajaranGuru {
+  static const tik = 'Teknologi Informasi dan Komunikasi (TIK)';
+  static const bahasaIndonesia = 'Bahasa Indonesia';
+  static const pilihan = [tik, bahasaIndonesia];
+}
+
 extension UserRoleX on UserRole {
   String get label => this == UserRole.siswa ? 'Siswa' : 'Guru';
 
@@ -21,6 +27,7 @@ class AppUser {
   final UserRole role;
   final String? kelas;
   String? induk; // NISN untuk siswa, NIP untuk guru
+  String? mataPelajaran;
   Uint8List? foto;
 
   AppUser({
@@ -31,6 +38,7 @@ class AppUser {
     required this.role,
     this.kelas,
     this.induk,
+    this.mataPelajaran,
     this.foto,
   });
 

@@ -1,9 +1,3 @@
-enum StatusValidasi { menungguValidasi, divalidasi }
-
-extension StatusValidasiX on StatusValidasi {
-  String get label => this == StatusValidasi.divalidasi ? 'Divalidasi' : 'Menunggu Validasi';
-}
-
 class HasilKuis {
   final String id;
   final String siswaId;
@@ -16,11 +10,11 @@ class HasilKuis {
   int durasi; // detik
   int benar; // BARU: jumlah soal yang dijawab benar
   List<int> jawabanSiswa; // BARU: jawaban siswa per soal (index opsi, -1 = tidak dijawab)
+  List<String> jawabanEsaiSiswa;
   bool remedial; // apakah pengerjaan ini adalah pengerjaan remedial
   bool remedialDitugaskan;
   bool remedialSelesai;
   final String tanggal;
-  StatusValidasi status;
 
   HasilKuis({
     required this.id,
@@ -34,11 +28,11 @@ class HasilKuis {
     required this.durasi,
     required this.benar, // BARU
     required this.jawabanSiswa, // BARU
+    this.jawabanEsaiSiswa = const [],
     this.remedial = false,
     this.remedialDitugaskan = false,
     this.remedialSelesai = false,
     required this.tanggal,
-    this.status = StatusValidasi.menungguValidasi,
   });
 
   bool get dibawahKkm => nilai < kkm;

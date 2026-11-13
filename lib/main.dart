@@ -27,7 +27,7 @@ class EdukasiTikApp extends StatelessWidget {
           return MaterialApp(
             title: 'Edukasi TIK',
             debugShowCheckedModeBanner: false,
-            theme: a11y.highContrast
+           theme: a11y.highContrast
                 ? AppTheme.highContrastLight()
                 : AppTheme.light(),
             darkTheme: a11y.highContrast

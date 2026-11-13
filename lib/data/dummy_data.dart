@@ -24,6 +24,16 @@ class DummyData {
           password: '123456',
           role: UserRole.guru,
           induk: '198501012010011001',
+          mataPelajaran: MataPelajaranGuru.tik,
+        ),
+        AppUser(
+          id: 'U3',
+          nama: 'Harry Wantono, S.Pd',
+          email: 'harry@guru.sch.id',
+          password: '123456',
+          role: UserRole.guru,
+          induk: '197906152006042003',
+          mataPelajaran: MataPelajaranGuru.bahasaIndonesia,
         ),
         AppUser(
           id: 'U4',
@@ -45,7 +55,7 @@ class DummyData {
         ),
       ];
 
-        static List<Kuis> kuis() => [
+  static List<Kuis> kuis() => [
         Kuis(
           id: 'K1',
           judul: 'Kuis Perangkat Komputer',
@@ -57,12 +67,14 @@ class DummyData {
           kkm: 75,
           soal: [
             Soal(
-              pertanyaan: 'Perangkat keras yang berfungsi sebagai otak komputer disebut...',
+              pertanyaan:
+                  'Perangkat keras yang berfungsi sebagai otak komputer disebut...',
               opsi: ['RAM', 'CPU', 'Monitor', 'Keyboard'],
               jawaban: 1,
             ),
             Soal(
-              pertanyaan: 'Alat untuk menampilkan hasil kerja komputer secara visual adalah...',
+              pertanyaan:
+                  'Alat untuk menampilkan hasil kerja komputer secara visual adalah...',
               opsi: ['Printer', 'Speaker', 'Monitor', 'Mouse'],
               jawaban: 2,
             ),
@@ -84,17 +96,30 @@ class DummyData {
           kkm: 75,
           soal: [
             Soal(
-              pertanyaan: 'Untuk membuat teks tebal pada Word digunakan ikon...',
-              opsi: ['I (Italic)', 'B (Bold)', 'U (Underline)', 'S (Strikethrough)'],
+              pertanyaan:
+                  'Untuk membuat teks tebal pada Word digunakan ikon...',
+              opsi: [
+                'I (Italic)',
+                'B (Bold)',
+                'U (Underline)',
+                'S (Strikethrough)'
+              ],
               jawaban: 1,
             ),
             Soal(
-              pertanyaan: 'Fitur menggabungkan beberapa sel pada tabel disebut...',
-              opsi: ['Split Cells', 'Insert Table', 'Merge Cells', 'Delete Cells'],
+              pertanyaan:
+                  'Fitur menggabungkan beberapa sel pada tabel disebut...',
+              opsi: [
+                'Split Cells',
+                'Insert Table',
+                'Merge Cells',
+                'Delete Cells'
+              ],
               jawaban: 2,
             ),
             Soal(
-              pertanyaan: 'Ekstensi file default dokumen Word 2016 ke atas adalah...',
+              pertanyaan:
+                  'Ekstensi file default dokumen Word 2016 ke atas adalah...',
               opsi: ['.doc', '.pdf', '.txt', '.docx'],
               jawaban: 3,
             ),
@@ -111,17 +136,20 @@ class DummyData {
           kkm: 80,
           soal: [
             Soal(
-              pertanyaan: 'Protokol yang umum digunakan untuk mengirim email adalah...',
+              pertanyaan:
+                  'Protokol yang umum digunakan untuk mengirim email adalah...',
               opsi: ['HTTP', 'SMTP', 'FTP', 'SSH'],
               jawaban: 1,
             ),
             Soal(
-              pertanyaan: 'Pada alamat email "siswa@sekolah.sch.id", bagian domain adalah...',
+              pertanyaan:
+                  'Pada alamat email "siswa@sekolah.sch.id", bagian domain adalah...',
               opsi: ['siswa', '@', 'sekolah.sch.id', '.id'],
               jawaban: 2,
             ),
             Soal(
-              pertanyaan: 'Berikut ini yang bukan merupakan browser internet adalah...',
+              pertanyaan:
+                  'Berikut ini yang bukan merupakan browser internet adalah...',
               opsi: ['Chrome', 'Firefox', 'Microsoft Word', 'Edge'],
               jawaban: 2,
             ),
@@ -140,6 +168,7 @@ class DummyData {
               'Komputer terdiri dari perangkat keras (hardware) seperti CPU, monitor, keyboard, dan mouse, '
               'serta perangkat lunak (software) yang menjalankan perintah pengguna.',
           pdfName: 'Bab1-Mengenal-Perangkat-Komputer.pdf',
+          mataPelajaran: MataPelajaranGuru.tik,
           ukuran: '248 KB',
           oleh: 'Budi Santoso',
           tanggal: '02 Sep 2026',
@@ -154,6 +183,7 @@ class DummyData {
               'Microsoft Word digunakan untuk membuat dokumen teks. Fitur dasar meliputi pengetikan, '
               'pengaturan huruf (bold, italic, underline), penyisipan gambar, dan pengaturan halaman.',
           pdfName: 'Bab2-Dasar-Microsoft-Word.pdf',
+          mataPelajaran: MataPelajaranGuru.tik,
           ukuran: '312 KB',
           oleh: 'Budi Santoso',
           tanggal: '04 Sep 2026',
@@ -168,6 +198,7 @@ class DummyData {
               'Internet memungkinkan pertukaran informasi secara global. Email adalah salah satu layanan '
               'internet untuk mengirim pesan elektronik.',
           pdfName: 'Bab3-Internet-dan-Email.pdf',
+          mataPelajaran: MataPelajaranGuru.tik,
           ukuran: '196 KB',
           oleh: 'Sari Dewi, S.Pd',
           tanggal: '07 Sep 2026',
@@ -182,6 +213,7 @@ class DummyData {
               'Microsoft Excel digunakan untuk mengolah data berbentuk tabel. Rumus dasar seperti SUM, '
               'AVERAGE, dan format sel membantu pengolahan data lebih cepat dan rapi.',
           pdfName: 'Bab4-Dasar-Microsoft-Excel.pdf',
+          mataPelajaran: MataPelajaranGuru.tik,
           ukuran: '274 KB',
           oleh: 'Sari Dewi, S.Pd',
           tanggal: '09 Sep 2026',
@@ -189,49 +221,47 @@ class DummyData {
       ];
 
   static List<HasilKuis> hasil() => [
-      HasilKuis(
-        id: 'H1',
-        siswaId: 'U1',
-        siswa: 'Ryo Febriyansah',
-        kuisId: 'K1',
-        kuis: 'Kuis Perangkat Komputer',
-        level: 'Mudah',
-        nilai: 100,
-        kkm: 75,
-        durasi: 142,
-        benar: 3,
-        jawabanSiswa: [1, 2, 0],
-        tanggal: '10 Sep 2026',
-        status: StatusValidasi.divalidasi,
-      ),
-      HasilKuis(
-        id: 'H2',
-        siswaId: 'U4',
-        siswa: 'Andi Wirawan',
-        kuisId: 'K2',
-        kuis: 'Kuis Microsoft Word',
-        level: 'Sedang',
-        nilai: 73,
-        kkm: 75,
-        durasi: 398,
-        benar: 2,
-        jawabanSiswa: [1, 2, 0],
-        tanggal: '12 Sep 2026',
-      ),
-      HasilKuis(
-        id: 'H3',
-        siswaId: 'U5',
-        siswa: 'Putri Amelia',
-        kuisId: 'K3',
-        kuis: 'Kuis Internet & Email',
-        level: 'Sulit',
-        nilai: 65,
-        kkm: 75,
-        durasi: 571,
-        benar: 2,
-        jawabanSiswa: [1, 0, 2],
-        tanggal: '13 Sep 2026',
-      ),
-    ];
-
+        HasilKuis(
+          id: 'H1',
+          siswaId: 'U1',
+          siswa: 'Ryo Febriyansah',
+          kuisId: 'K1',
+          kuis: 'Kuis Perangkat Komputer',
+          level: 'Mudah',
+          nilai: 100,
+          kkm: 75,
+          durasi: 142,
+          benar: 3,
+          jawabanSiswa: [1, 2, 0],
+          tanggal: '10 Sep 2026',
+        ),
+        HasilKuis(
+          id: 'H2',
+          siswaId: 'U4',
+          siswa: 'Andi Wirawan',
+          kuisId: 'K2',
+          kuis: 'Kuis Microsoft Word',
+          level: 'Sedang',
+          nilai: 73,
+          kkm: 75,
+          durasi: 398,
+          benar: 2,
+          jawabanSiswa: [1, 2, 0],
+          tanggal: '12 Sep 2026',
+        ),
+        HasilKuis(
+          id: 'H3',
+          siswaId: 'U5',
+          siswa: 'Putri Amelia',
+          kuisId: 'K3',
+          kuis: 'Kuis Internet & Email',
+          level: 'Sulit',
+          nilai: 65,
+          kkm: 75,
+          durasi: 571,
+          benar: 2,
+          jawabanSiswa: [1, 0, 2],
+          tanggal: '13 Sep 2026',
+        ),
+      ];
 }

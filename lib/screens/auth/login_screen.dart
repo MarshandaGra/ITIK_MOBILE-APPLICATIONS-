@@ -134,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             isGuru ? AppColors.greenLight : AppColors.blueLight,
                         title: u.nama,
                         subtitle: u.kelas == null
-                            ? u.induk ?? '-'
+                            ? '${u.induk ?? '-'}${isGuru && u.mataPelajaran != null ? ' • ${u.mataPelajaran}' : ''}'
                             : '${u.induk ?? '-'} • ${u.kelas}',
                         trailing: AppPill(
                           label: isGuru ? 'Guru' : 'Siswa',

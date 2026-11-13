@@ -118,6 +118,7 @@ class AppProvider extends ChangeNotifier {
     required UserRole role,
     String? kelas,
     String? induk,
+    String? mataPelajaran,
   }) {
     if (nama.trim().isEmpty || induk == null || induk.trim().isEmpty) {
       return role == UserRole.siswa
@@ -148,6 +149,10 @@ class AppProvider extends ChangeNotifier {
     if (role == UserRole.siswa && (kelas == null || kelas.trim().isEmpty)) {
       return 'Kelas wajib diisi';
     }
+    if (role == UserRole.guru &&
+        !MataPelajaranGuru.pilihan.contains(mataPelajaran)) {
+      return 'Mata pelajaran guru wajib dipilih';
+    }
 
     final u = AppUser(
       id: 'U${DateTime.now().millisecondsSinceEpoch}',
@@ -157,6 +162,7 @@ class AppProvider extends ChangeNotifier {
       role: role,
       kelas: role == UserRole.siswa ? kelas : null,
       induk: identifier,
+      mataPelajaran: role == UserRole.guru ? mataPelajaran : null,
     );
 
     users.add(u);
@@ -170,7 +176,6 @@ class AppProvider extends ChangeNotifier {
   }
 
   String? updateAccount({
-    required String identifier,
     required String passwordSaatIni,
     required String passwordBaru,
     required String konfirmasiPassword,
@@ -178,15 +183,6 @@ class AppProvider extends ChangeNotifier {
     final user = currentUser;
 
     if (user == null) return 'Pengguna belum masuk';
-
-    final identifierBaru = identifier.trim();
-
-    if (identifierBaru.isEmpty) {
-      return user.role == UserRole.siswa
-          ? 'NISN wajib diisi'
-          : 'NIP wajib diisi';
-    }
-
     final inginUbahPassword = passwordSaatIni.isNotEmpty ||
         passwordBaru.isNotEmpty ||
         konfirmasiPassword.isNotEmpty;
@@ -204,21 +200,6 @@ class AppProvider extends ChangeNotifier {
         return 'Konfirmasi kata sandi baru tidak cocok';
       }
     }
-
-    final dipakai = users.any((u) =>
-        !identical(u, user) &&
-        u.role == user.role &&
-        (u.induk ?? '').trim().toLowerCase() == identifierBaru.toLowerCase());
-
-    if (dipakai) {
-      return user.role == UserRole.siswa
-          ? 'NISN sudah digunakan akun lain'
-          : 'NIP sudah digunakan akun lain';
-    }
-
-    user.induk = identifierBaru;
-    user.email = '$identifierBaru@sekolah.sch.id';
-
     if (passwordBaru.isNotEmpty) {
       user.password = passwordBaru;
     }
@@ -268,6 +249,37 @@ class AppProvider extends ChangeNotifier {
   List<HasilKuis> get riwayatSiswaSaatIni =>
       hasilList.where(milikSiswaIni).toList();
 
+  String _normalisasiMataPelajaran(String? mataPelajaran) {
+    final value = (mataPelajaran ?? '').trim().toLowerCase();
+    if (value.contains('tik') || value.contains('teknologi informasi')) {
+      return 'tik';
+    }
+    if (value.contains('bahasa indonesia')) return 'bahasa indonesia';
+    return value;
+  }
+
+  bool _sesuaiMataPelajaranGuru(String? mataPelajaran) {
+    final guru = currentUser;
+    return guru?.role == UserRole.guru &&
+        _normalisasiMataPelajaran(mataPelajaran) ==
+            _normalisasiMataPelajaran(
+                guru!.mataPelajaran ?? MataPelajaranGuru.tik);
+  }
+
+  List<Materi> get materiGuruSaatIni => materiList
+      .where((materi) => _sesuaiMataPelajaranGuru(materi.mataPelajaran))
+      .toList();
+
+  List<Kuis> get kuisGuruSaatIni {
+    final materiIds = materiGuruSaatIni.map((materi) => materi.id).toSet();
+    return kuisList.where((kuis) => materiIds.contains(kuis.materiId)).toList();
+  }
+
+  List<HasilKuis> get hasilGuruSaatIni {
+    final kuisIds = kuisGuruSaatIni.map((kuis) => kuis.id).toSet();
+    return hasilList.where((hasil) => kuisIds.contains(hasil.kuisId)).toList();
+  }
+
   HasilKuis? get remedialAktifUntukSiswa {
     try {
       return hasilList.firstWhere((h) =>
@@ -277,16 +289,13 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  List<HasilKuis> get menungguValidasi => hasilList
-      .where((h) => h.status == StatusValidasi.menungguValidasi)
-      .toList();
-
   HasilKuis submitHasilKuis({
     required Kuis kuis,
     required int nilai,
     required int benar,
     required int durasiDetik,
     required List<int> jawabanSiswa,
+    List<String> jawabanEsaiSiswa = const [],
     String? remedialOfId,
   }) {
     final h = HasilKuis(
@@ -301,6 +310,7 @@ class AppProvider extends ChangeNotifier {
       durasi: durasiDetik,
       benar: benar,
       jawabanSiswa: jawabanSiswa,
+      jawabanEsaiSiswa: jawabanEsaiSiswa,
       remedial: remedialOfId != null,
       tanggal: 'Hari ini',
     );
@@ -319,14 +329,7 @@ class AppProvider extends ChangeNotifier {
     return h;
   }
 
-  // ---------------- GURU: VALIDASI & REMEDIAL ----------------
-
-  void validasiNilai(String hasilId) {
-    final h = hasilList.firstWhere((x) => x.id == hasilId);
-
-    h.status = StatusValidasi.divalidasi;
-    notifyListeners();
-  }
+  // ---------------- GURU: REMEDIAL ----------------
 
   void tugaskanRemedial(String hasilId) {
     final h = hasilList.firstWhere((x) => x.id == hasilId);
@@ -388,6 +391,14 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setKuisPublished(String id, bool isPublished) {
+    final kuis = kuisById(id);
+    if (kuis == null) return;
+
+    kuis.isPublished = isPublished;
+    notifyListeners();
+  }
+
   void editKuisMeta(
     String id, {
     required String judul,
@@ -395,6 +406,12 @@ class AppProvider extends ChangeNotifier {
     required String level,
     required int waktu,
     required int kkm,
+    String? deskripsi,
+    Uint8List? gambar,
+    String? tahunAjaran,
+    String? kategori,
+    DateTime? tanggalTerbit,
+    DateTime? tanggalSelesai,
   }) {
     final k = kuisById(id);
 
@@ -405,6 +422,12 @@ class AppProvider extends ChangeNotifier {
     k.level = level;
     k.waktu = waktu;
     k.kkm = kkm;
+    k.deskripsi = deskripsi;
+    k.gambar = gambar;
+    k.tahunAjaran = tahunAjaran;
+    k.kategori = kategori;
+    k.tanggalTerbit = tanggalTerbit;
+    k.tanggalSelesai = tanggalSelesai;
 
     notifyListeners();
   }

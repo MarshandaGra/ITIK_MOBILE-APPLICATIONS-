@@ -14,8 +14,9 @@ class ProfilScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final user = app.currentUser!;
-    final roleLabel =
-        user.role == UserRole.siswa ? 'Siswa' : 'Guru Pengampu TIK';
+    final roleLabel = user.role == UserRole.siswa
+        ? 'Siswa'
+        : 'Guru Pengampu ${user.mataPelajaran ?? MataPelajaranGuru.tik}';
     final color = RoleColors.of(user.role.value);
 
     return Scaffold(

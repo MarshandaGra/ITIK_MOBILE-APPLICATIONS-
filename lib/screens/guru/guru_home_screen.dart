@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/user.dart';
-import '../../models/hasil_kuis.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../shared/notifikasi_screen.dart';
@@ -23,15 +22,17 @@ class GuruHomeScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Yang lulus otomatis valid, jadi hanya hitung yang di bawah KKM & belum divalidasi
-    final pending = app.hasilList
-        .where((h) => h.dibawahKkm && h.status != StatusValidasi.divalidasi)
+    // Hanya hasil di bawah KKM yang belum mendapat penugasan remedial.
+    final hasilGuru = app.hasilGuruSaatIni;
+    final pending = hasilGuru
+        .where(
+            (h) => h.dibawahKkm && !h.remedialDitugaskan && !h.remedialSelesai)
         .length;
     // CATATAN: "+ 2" dari kode aslimu dipertahankan (sepertinya penyesuaian data dummy).
     final totalSiswa =
         app.users.where((u) => u.role == UserRole.siswa).length + 2;
-    final totalKuis = app.kuisList.length;
-    final totalMateri = app.materiList.length;
+    final totalKuis = app.kuisGuruSaatIni.length;
+    final totalMateri = app.materiGuruSaatIni.length;
 
     // Antisipasi: nama kosong
     final nama = user.nama.trim().isEmpty ? 'Guru' : user.nama.trim();
@@ -140,9 +141,9 @@ class GuruHomeScreen extends StatelessWidget {
                                   fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              'Guru Pengampu TIK',
-                              style: TextStyle(
+                            Text(
+                              'Guru Pengampu ${user.mataPelajaran ?? MataPelajaranGuru.tik}',
+                              style: const TextStyle(
                                   color: Colors.white70, fontSize: 12.5),
                             ),
                             const SizedBox(height: 18),
@@ -160,7 +161,7 @@ class GuruHomeScreen extends StatelessWidget {
                                 Expanded(
                                     child: _StatCard(
                                         value: '$pending',
-                                        label: 'Perlu Validasi')),
+                                        label: 'Perlu Remedial')),
                               ],
                             ),
                           ],
@@ -182,8 +183,8 @@ class GuruHomeScreen extends StatelessWidget {
                     icon: Icons.fact_check_rounded,
                     iconColor: AppColors.green,
                     iconBg: AppColors.greenLight,
-                    title: 'Validasi Nilai Siswa',
-                    subtitle: '$pending nilai menunggu validasi',
+                    title: 'Nilai & Remedial Siswa',
+                    subtitle: '$pending siswa perlu remedial',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -224,7 +225,7 @@ class GuruHomeScreen extends StatelessWidget {
   }
 }
 
-/// Kartu putih statistik (Siswa / Kuis / Perlu Validasi)
+/// Kartu putih statistik (Siswa / Kuis / Perlu Remedial)
 class _StatCard extends StatelessWidget {
   final String value;
   final String label;
