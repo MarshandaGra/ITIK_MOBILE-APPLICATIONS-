@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 
 /// Setara `.list-item` pada desain: baris ikon + judul + subjudul + chevron.
@@ -34,7 +36,8 @@ class AppListItem extends StatelessWidget {
             Container(
               width: 42,
               height: 42,
-              decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: iconBg, borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: iconColor, size: 21),
             ),
             const SizedBox(width: 12),
@@ -44,19 +47,23 @@ class AppListItem extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.muted),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
             const SizedBox(width: 6),
-            trailing ?? const Icon(Icons.chevron_right, color: AppColors.muted, size: 20),
+            trailing ??
+                const Icon(Icons.chevron_right,
+                    color: AppColors.muted, size: 20),
           ],
         ),
       ),
@@ -106,10 +113,14 @@ class NoticeBox extends StatelessWidget {
           Row(children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 6),
-            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+            Text(title,
+                style: TextStyle(
+                    color: color, fontWeight: FontWeight.w800, fontSize: 13)),
           ]),
           const SizedBox(height: 6),
-          Text(message, style: const TextStyle(fontSize: 12.5, height: 1.5, color: Color(0xFF5B4A2E))),
+          Text(message,
+              style: const TextStyle(
+                  fontSize: 12.5, height: 1.5, color: Color(0xFF5B4A2E))),
           if (action != null) ...[const SizedBox(height: 10), action!],
         ],
       ),
@@ -149,13 +160,17 @@ class SectionTitle extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+          Text(title,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
           if (linkText != null)
             GestureDetector(
               onTap: onLinkTap,
               child: Text(linkText!,
                   style: const TextStyle(
-                      color: AppColors.blue, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      color: AppColors.blue,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5)),
             ),
         ],
       ),
@@ -168,10 +183,14 @@ Future<bool> confirmDialog(BuildContext context, String message) async {
   final result = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
-      content: Text(message, style: const TextStyle(fontSize: 13.5, height: 1.55)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadius)),
+      content:
+          Text(message, style: const TextStyle(fontSize: 13.5, height: 1.55)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+        TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal')),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AppColors.red),
           onPressed: () => Navigator.pop(ctx, true),
@@ -196,10 +215,39 @@ void showAppToast(BuildContext context, String message) {
   );
 }
 
+Future<void> openPdfUrl(BuildContext context, String? url) async {
+  await openExternalUrl(context, url, contentName: 'PDF');
+}
+
+Future<void> openExternalUrl(
+  BuildContext context,
+  String? url, {
+  required String contentName,
+}) async {
+  final uri = Uri.tryParse(url ?? '');
+  if (uri == null ||
+      !['http', 'https'].contains(uri.scheme) ||
+      uri.host.isEmpty) {
+    showAppToast(context, 'URL $contentName tidak tersedia atau tidak valid.');
+    return;
+  }
+
+  try {
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      showAppToast(context, '$contentName tidak dapat dibuka.');
+    }
+  } on PlatformException catch (error) {
+    if (context.mounted) {
+      showAppToast(
+          context, 'Gagal membuka $contentName: ${error.message ?? 'error'}');
+    }
+  }
+}
+
 String fmtWaktu(int detik) {
   final d = detik.clamp(0, 1 << 30);
   final m = d ~/ 60;
   final s = d % 60;
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
-

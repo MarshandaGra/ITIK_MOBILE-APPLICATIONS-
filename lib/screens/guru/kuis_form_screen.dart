@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/app_provider.dart';
 import '../../models/kuis.dart';
+import '../../models/mapel_option.dart';
+import '../../models/tahun_ajaran_option.dart';
+import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'kuis_detail_screen.dart';
 
-/// Form tambah/edit kuis. Jika [kuisId] diisi -> mode edit.
 class KuisFormScreen extends StatefulWidget {
   final String? kuisId;
+
   const KuisFormScreen({super.key, this.kuisId});
 
   @override
@@ -16,12 +18,33 @@ class KuisFormScreen extends StatefulWidget {
 }
 
 class _KuisFormScreenState extends State<KuisFormScreen> {
-  late final TextEditingController judulCtrl;
-  late final TextEditingController waktuCtrl;
-  late final TextEditingController kkmCtrl;
-  String? materiId;
-  String level = 'Mudah';
-  static const levels = ['Mudah', 'Sedang', 'Sulit'];
+  static const _difficultyLevels = ['mudah', 'sedang', 'sulit'];
+  static const _categories = {
+    'post-test': 'Post Test',
+    'pre-test': 'Pre-Test',
+    'kuis harian': 'Kuis Harian',
+    'ulangan': 'Ulangan',
+    'remedial': 'Remedial',
+  };
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _judulController;
+  late final TextEditingController _deskripsiController;
+  late final TextEditingController _waktuController;
+  late final TextEditingController _kkmController;
+  List<MapelOption> _mapelOptions = [];
+  TahunAjaranOption? _tahunAjaranAktif;
+  String? _idMapel;
+  String? _tingkatKesulitan;
+  String? _mapelError;
+  String? _tahunAjaranError;
+  bool _loadingMapel = true;
+  bool _loadingTahunAjaran = true;
+  String? _materiId;
+  String? _idKuisAsal;
+  String _kategori = 'kuis harian';
+  DateTime? _waktuMulai;
+  DateTime? _waktuSelesai;
+  bool _saving = false;
 
   bool get isEdit => widget.kuisId != null;
 
@@ -29,130 +52,513 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
   void initState() {
     super.initState();
     final app = context.read<AppProvider>();
-    final existing = widget.kuisId != null ? app.kuisById(widget.kuisId!) : null;
-    judulCtrl = TextEditingController(text: existing?.judul ?? '');
-    waktuCtrl = TextEditingController(text: '${existing?.waktu ?? 10}');
-    kkmCtrl = TextEditingController(text: '${existing?.kkm ?? 75}');
-    materiId = existing?.materiId ?? (app.materiList.isNotEmpty ? app.materiList.first.id : null);
-    level = existing?.level ?? 'Mudah';
+    final existing = isEdit ? app.kuisById(widget.kuisId!) : null;
+    _judulController = TextEditingController(text: existing?.judul ?? '');
+    _deskripsiController =
+        TextEditingController(text: existing?.deskripsi ?? '');
+    _waktuController = TextEditingController(
+        text: '${existing?.waktu == 0 ? 10 : existing?.waktu ?? 10}');
+    _kkmController = TextEditingController(
+        text: '${existing?.kkm == 0 ? 75 : existing?.kkm ?? 75}');
+    _idMapel = existing?.idMapel;
+    final existingDifficulty = existing?.level.trim().toLowerCase();
+    _tingkatKesulitan = _difficultyLevels.contains(existingDifficulty)
+        ? existingDifficulty
+        : 'mudah';
+    _materiId = existing?.materiId;
+    _idKuisAsal = existing?.idKuisAsal;
+    final existingCategory = existing?.kategori.trim().toLowerCase();
+    _kategori = _categories.containsKey(existingCategory)
+        ? existingCategory!
+        : 'kuis harian';
+    _waktuMulai = existing?.waktuMulai;
+    _waktuSelesai = existing?.waktuSelesai;
+    _loadMapelOptions(existing?.idMapel);
+    _loadTahunAjaranAktif();
+  }
+
+  Future<void> _loadMapelOptions(String? currentId) async {
+    setState(() {
+      _loadingMapel = true;
+      _mapelError = null;
+    });
+    try {
+      final options = await context
+          .read<AppProvider>()
+          .loadMapelOptions(currentId: currentId);
+      if (!mounted) return;
+      setState(() {
+        _mapelOptions = options;
+        if (!options.any((mapel) => mapel.id == _idMapel)) {
+          _idMapel = null;
+        }
+        _loadingMapel = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _mapelError = 'Gagal memuat mata pelajaran: $error';
+        _loadingMapel = false;
+      });
+    }
+  }
+
+  Future<void> _loadTahunAjaranAktif() async {
+    setState(() {
+      _loadingTahunAjaran = true;
+      _tahunAjaranError = null;
+    });
+    try {
+      final tahunAjaran =
+          await context.read<AppProvider>().loadTahunAjaranAktif();
+      if (!mounted) return;
+      if (tahunAjaran == null ||
+          tahunAjaran.id.isEmpty ||
+          tahunAjaran.nama.isEmpty) {
+        setState(() {
+          _tahunAjaranError = 'Tahun ajaran aktif belum tersedia.';
+          _loadingTahunAjaran = false;
+        });
+        return;
+      }
+      setState(() {
+        _tahunAjaranAktif = tahunAjaran;
+        _loadingTahunAjaran = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _tahunAjaranError = 'Gagal memuat tahun ajaran aktif: $error';
+        _loadingTahunAjaran = false;
+      });
+    }
   }
 
   @override
   void dispose() {
-    judulCtrl.dispose();
-    waktuCtrl.dispose();
-    kkmCtrl.dispose();
+    _judulController.dispose();
+    _deskripsiController.dispose();
+    _waktuController.dispose();
+    _kkmController.dispose();
     super.dispose();
   }
 
-  void _simpan() {
-    if (judulCtrl.text.trim().isEmpty) {
-      showAppToast(context, 'Judul kuis wajib diisi');
+  Future<DateTime?> _pilihTanggalWaktu(DateTime? current) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: current ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: DateTime(now.year + 5),
+    );
+    if (date == null || !mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: current == null
+          ? const TimeOfDay(hour: 8, minute: 0)
+          : TimeOfDay.fromDateTime(current),
+    );
+    if (time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  String _formatDateTime(DateTime? value) {
+    if (value == null) return 'Pilih tanggal dan waktu';
+    final local = value.toLocal();
+    final date = '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/${local.year}';
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '$date • $time';
+  }
+
+  Future<void> _simpan() async {
+    if (_saving) return;
+    if (_loadingMapel ||
+        _mapelError != null ||
+        _loadingTahunAjaran ||
+        _tahunAjaranError != null ||
+        _tahunAjaranAktif == null) {
+      showAppToast(
+          context, 'Data mata pelajaran atau tahun ajaran belum siap.');
       return;
     }
-    final waktu = int.tryParse(waktuCtrl.text) ?? 0;
-    final kkm = int.tryParse(kkmCtrl.text) ?? 0;
-    if (waktu < 1) {
-      showAppToast(context, 'Durasi kuis wajib diisi (minimal 1 menit)');
-      return;
-    }
-    if (kkm < 1 || kkm > 100) {
-      showAppToast(context, 'KKM wajib diisi, antara 1-100');
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
+
     final app = context.read<AppProvider>();
-    if (isEdit) {
-      app.editKuisMeta(widget.kuisId!, judul: judulCtrl.text, materiId: materiId ?? '', level: level, waktu: waktu, kkm: kkm);
-      showAppToast(context, 'Kuis berhasil diperbarui ✔');
-      Navigator.pop(context);
-    } else {
-      final id = 'K${DateTime.now().millisecondsSinceEpoch}';
-      app.tambahKuis(Kuis(
-        id: id,
-        judul: judulCtrl.text,
-        materiId: materiId ?? '',
-        level: level,
-        oleh: app.currentUser!.nama,
-        tanggal: 'Hari ini',
+    final waktu = int.tryParse(_waktuController.text) ?? 0;
+    final kkm = int.tryParse(_kkmController.text) ?? 0;
+    if (_kategori == 'ulangan' &&
+        (_waktuMulai == null ||
+            _waktuSelesai == null ||
+            !_waktuSelesai!.isAfter(_waktuMulai!))) {
+      showAppToast(context, 'Jadwal ulangan tidak valid.');
+      return;
+    }
+    if (_kategori == 'remedial' && _idKuisAsal == null) {
+      showAppToast(context, 'Kuis asal remedial wajib dipilih.');
+      return;
+    }
+
+    final existing = isEdit ? app.kuisById(widget.kuisId!) : null;
+    if (isEdit && existing == null) {
+      showAppToast(context, 'Kuis tidak ditemukan. Muat ulang daftar kuis.');
+      return;
+    }
+    if (existing?.statusPublikasi == 'terbit') {
+      showAppToast(context, 'Kuis yang sudah terbit tidak dapat diedit.');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final quiz = Kuis(
+        id: existing?.id ?? '',
+        judul: _judulController.text.trim(),
+        materiId: _materiId ?? '',
+        level: _tingkatKesulitan!,
+        oleh: existing?.oleh ?? app.currentUser?.nama ?? '',
+        tanggal: existing?.tanggal ?? '',
         waktu: waktu,
         kkm: kkm,
-        soal: [],
-      ));
-      showAppToast(context, 'Kuis dibuat. Silakan tambahkan soal ✔');
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => KuisDetailScreen(kuisId: id)));
+        soal: existing?.soal ?? <Soal>[],
+        soalCount: existing?.soalCount,
+        kategori: _kategori,
+        deskripsi: _deskripsiController.text.trim(),
+        idMapel: _idMapel,
+        idTahunAjaran: existing?.idTahunAjaran ?? _tahunAjaranAktif!.id,
+        idKuisAsal: _kategori == 'remedial' ? _idKuisAsal : null,
+        statusPublikasi: existing?.statusPublikasi ?? 'draft',
+        waktuMulai: _kategori == 'ulangan' ? _waktuMulai : null,
+        waktuSelesai: _kategori == 'ulangan' ? _waktuSelesai : null,
+      );
+
+      if (isEdit) {
+        await app.editKuis(widget.kuisId!, quiz);
+        if (!mounted) return;
+        showAppToast(context, 'Kuis berhasil diperbarui.');
+        Navigator.pop(context);
+      } else {
+        final saved = await app.tambahKuis(quiz);
+        if (!mounted) return;
+        showAppToast(context, 'Kuis dibuat sebagai draft.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => KuisDetailScreen(kuisId: saved.id)),
+        );
+      }
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal menyimpan kuis: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final materiOptions =
+        app.materiList.where((materi) => materi.idMapel == _idMapel).toList();
+    final originQuizzes = app.kuisList
+        .where((quiz) =>
+            quiz.id != widget.kuisId &&
+            quiz.kategori != 'remedial' &&
+            quiz.statusPublikasi == 'terbit')
+        .toList();
+
     return Scaffold(
       appBar: simpleAppBar(isEdit ? 'Edit Kuis' : 'Tambah Kuis Baru'),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          children: [
-            AppCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _label('Judul Kuis'),
-                TextField(controller: judulCtrl, decoration: const InputDecoration(hintText: 'Contoh: Kuis Perangkat Lunak')),
-                const SizedBox(height: 14),
-                _label('Materi Terkait'),
-                DropdownButtonFormField<String>(
-                  value: materiId,
-                  items: app.materiList
-                      .map((m) => DropdownMenuItem(value: m.id, child: Text('${m.bab} — ${m.judul}', overflow: TextOverflow.ellipsis)))
-                      .toList(),
-                  onChanged: (v) => setState(() => materiId = v),
-                  decoration: const InputDecoration(),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            children: [
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Judul Kuis *'),
+                    TextFormField(
+                      controller: _judulController,
+                      maxLength: 150,
+                      decoration: const InputDecoration(
+                          hintText: 'Contoh: Kuis Perangkat Lunak'),
+                      validator: (value) => (value ?? '').trim().isEmpty
+                          ? 'Judul kuis wajib diisi.'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    _label('Deskripsi'),
+                    TextFormField(
+                      controller: _deskripsiController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                          hintText: 'Deskripsi singkat (opsional)'),
+                    ),
+                    const SizedBox(height: 14),
+                    _label('Mata Pelajaran *'),
+                    if (_loadingMapel)
+                      const LinearProgressIndicator()
+                    else if (_mapelError != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _mapelError!,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.red),
+                          ),
+                          TextButton(
+                            onPressed: () => _loadMapelOptions(_idMapel),
+                            child: const Text('Coba lagi'),
+                          ),
+                        ],
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            _mapelOptions.any((item) => item.id == _idMapel)
+                                ? _idMapel
+                                : null,
+                        items: _mapelOptions
+                            .map((item) => DropdownMenuItem(
+                                  value: item.id,
+                                  child: Text(item.nama),
+                                ))
+                            .toList(),
+                        onChanged: _mapelOptions.isEmpty
+                            ? null
+                            : (value) => setState(() {
+                                  _idMapel = value;
+                                  if (_materiId != null &&
+                                      app.materiById(_materiId!)?.idMapel !=
+                                          value) {
+                                    _materiId = null;
+                                  }
+                                }),
+                        decoration: InputDecoration(
+                          hintText: _mapelOptions.isEmpty
+                              ? 'Mata pelajaran belum tersedia'
+                              : 'Pilih mata pelajaran',
+                        ),
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'Mata pelajaran wajib dipilih.'
+                            : null,
+                      ),
+                    const SizedBox(height: 14),
+                    _label('Tahun Ajaran Aktif'),
+                    if (_loadingTahunAjaran)
+                      const LinearProgressIndicator()
+                    else if (_tahunAjaranError != null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _tahunAjaranError!,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.red),
+                          ),
+                          TextButton(
+                            onPressed: _loadTahunAjaranAktif,
+                            child: const Text('Coba lagi'),
+                          ),
+                        ],
+                      )
+                    else
+                      TextFormField(
+                        key: ValueKey(_tahunAjaranAktif!.id),
+                        initialValue: _tahunAjaranAktif!.nama,
+                        enabled: false,
+                        decoration: const InputDecoration(
+                          hintText: 'Tahun ajaran aktif',
+                        ),
+                      ),
+                    const SizedBox(height: 14),
+                    _label('Tingkat Kesulitan *'),
+                    DropdownButtonFormField<String>(
+                      initialValue: _tingkatKesulitan,
+                      items: _difficultyLevels
+                          .map((level) => DropdownMenuItem(
+                                value: level,
+                                child: Text(
+                                    '${level[0].toUpperCase()}${level.substring(1)}'),
+                              ))
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _tingkatKesulitan = value),
+                      decoration: const InputDecoration(
+                        hintText: 'Pilih tingkat kesulitan',
+                      ),
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Tingkat kesulitan wajib dipilih.'
+                          : null,
+                    ),
+                    const SizedBox(height: 14),
+                    _label('Materi Terkait (opsional)'),
+                    DropdownButtonFormField<String>(
+                      initialValue:
+                          materiOptions.any((item) => item.id == _materiId)
+                              ? _materiId
+                              : null,
+                      items: materiOptions
+                          .map((item) => DropdownMenuItem(
+                              value: item.id,
+                              child: Text('${item.bab} — ${item.judul}',
+                                  overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (value) => setState(() => _materiId = value),
+                      decoration: const InputDecoration(
+                          hintText: 'Pilih materi terkait'),
+                    ),
+                    const SizedBox(height: 14),
+                    _label('Kategori *'),
+                    DropdownButtonFormField<String>(
+                      initialValue: _kategori,
+                      items: _categories.entries
+                          .map((category) => DropdownMenuItem(
+                              value: category.key, child: Text(category.value)))
+                          .toList(),
+                      onChanged: (value) => setState(() {
+                        _kategori = value ?? 'kuis harian';
+                        if (_kategori != 'remedial') _idKuisAsal = null;
+                      }),
+                      decoration: const InputDecoration(),
+                    ),
+                    if (_kategori == 'remedial') ...[
+                      const SizedBox(height: 14),
+                      _label('Kuis Asal *'),
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            originQuizzes.any((item) => item.id == _idKuisAsal)
+                                ? _idKuisAsal
+                                : null,
+                        items: originQuizzes
+                            .map((item) => DropdownMenuItem(
+                                value: item.id, child: Text(item.judul)))
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _idKuisAsal = value),
+                        decoration: const InputDecoration(
+                            hintText: 'Pilih kuis asal yang sudah terbit'),
+                        validator: (value) => _kategori == 'remedial' &&
+                                (value == null || value.isEmpty)
+                            ? 'Kuis asal remedial wajib dipilih.'
+                            : null,
+                      ),
+                    ],
+                    if (_kategori == 'ulangan') ...[
+                      const SizedBox(height: 14),
+                      _label('Jadwal Ulangan *'),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final value = await _pilihTanggalWaktu(_waktuMulai);
+                          if (value != null && mounted) {
+                            setState(() => _waktuMulai = value);
+                          }
+                        },
+                        child: Text('Mulai: ${_formatDateTime(_waktuMulai)}'),
+                      ),
+                      OutlinedButton(
+                        onPressed: () async {
+                          final value = await _pilihTanggalWaktu(_waktuSelesai);
+                          if (value != null && mounted) {
+                            setState(() => _waktuSelesai = value);
+                          }
+                        },
+                        child:
+                            Text('Selesai: ${_formatDateTime(_waktuSelesai)}'),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _label('Alokasi Waktu (menit)'),
+                              TextFormField(
+                                controller: _waktuController,
+                                keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  final number = int.tryParse(value ?? '');
+                                  if (number == null ||
+                                      number < 1 ||
+                                      number > 300) {
+                                    return 'Isi 1–300 menit.';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _label('KKM (0–100)'),
+                              TextFormField(
+                                controller: _kkmController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                validator: (value) {
+                                  final number = num.tryParse(value ?? '');
+                                  if (number == null ||
+                                      number < 0 ||
+                                      number > 100) {
+                                    return 'Isi nilai 0–100.';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Kuis disimpan sebagai draft. Total bobot soal harus tepat 100 sebelum dapat dipublikasikan.',
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                _label('Tingkat Kesulitan'),
-                DropdownButtonFormField<String>(
-                  value: level,
-                  items: levels.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
-                  onChanged: (v) => setState(() => level = v ?? 'Mudah'),
-                  decoration: const InputDecoration(),
-                ),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Alokasi Waktu (menit)'),
-                      TextField(controller: waktuCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration()),
-                    ]),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('KKM (nilai minimum)'),
-                      TextField(controller: kkmCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration()),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 6),
-                const Text(
-                  'Siswa tidak melihat hitung mundur. Waktu pengerjaan dicatat otomatis dan dibandingkan dengan alokasi ini di halaman Validasi.',
-                  style: TextStyle(fontSize: 11, color: AppColors.muted),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
-              onPressed: _simpan,
-              child: Text(isEdit ? 'Simpan Perubahan' : 'Buat Kuis & Tambah Soal'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-          ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
+                onPressed: _saving ? null : _simpan,
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(isEdit
+                        ? 'Simpan Perubahan'
+                        : 'Buat Kuis & Tambah Soal'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal')),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _label(String s) => Padding(
+  Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(s, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+        child: Text(text,
+            style:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
       );
 }

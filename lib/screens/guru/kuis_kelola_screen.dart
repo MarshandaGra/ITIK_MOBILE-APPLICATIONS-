@@ -13,7 +13,7 @@ class KuisKelolaScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final list = app.kuisList.reversed.toList();
+    final list = app.kuisList;
 
     return Scaffold(
       appBar: simpleAppBar('Kelola Kuis'),
@@ -21,12 +21,15 @@ class KuisKelolaScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
           children: [
-            const Text('Berikut kuis yang sudah dibuat. Pilih Edit untuk mengubah atau Hapus untuk menghapusnya.',
+            const Text(
+                'Berikut kuis yang sudah dibuat. Pilih Edit untuk mengubah atau Hapus untuk menghapusnya.',
                 style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
             const SizedBox(height: 10),
             SectionTitle('Kuis Sebelumnya (${list.length})'),
             if (list.isEmpty)
-              const EmptyState(text: 'Belum ada kuis yang dibuat.\nTekan tombol di bawah untuk membuat kuis pertama.')
+              const EmptyState(
+                  text:
+                      'Belum ada kuis yang dibuat.\nTekan tombol di bawah untuk membuat kuis pertama.')
             else
               ...list.map((k) => _KuisManageCard(kuis: k, app: app)),
           ],
@@ -34,7 +37,8 @@ class KuisKelolaScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.purple,
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KuisFormScreen())),
+        onPressed: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const KuisFormScreen())),
         icon: const Icon(Icons.add),
         label: const Text('Tambahkan Kuis'),
       ),
@@ -48,10 +52,16 @@ class _KuisManageCard extends StatelessWidget {
   const _KuisManageCard({required this.kuis, required this.app});
 
   Future<void> _hapus(BuildContext context) async {
-    final ok = await confirmDialog(context, 'Hapus "${kuis.judul}" beserta ${kuis.soal.length} soal di dalamnya?\n\nTindakan ini tidak dapat dibatalkan.');
+    final ok = await confirmDialog(context,
+        'Arsipkan kuis "${kuis.judul}"? Kuis tidak akan terlihat oleh siswa.');
     if (ok) {
-      app.hapusKuis(kuis.id);
-      if (context.mounted) showAppToast(context, 'Kuis telah dihapus');
+      try {
+        await app.hapusKuis(kuis.id);
+        if (context.mounted) showAppToast(context, 'Kuis berhasil diarsipkan.');
+      } catch (error) {
+        if (context.mounted)
+          showAppToast(context, 'Gagal mengarsipkan kuis: $error');
+      }
     }
   }
 
@@ -59,8 +69,6 @@ class _KuisManageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = kuis;
     final m = app.materiById(k.materiId);
-    final adaGambar = k.soal.where((s) => s.gambar != null).length;
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppCard(
@@ -71,32 +79,58 @@ class _KuisManageCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(color: AppColors.orangeLight, borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.quiz_rounded, color: AppColors.orange, size: 19),
+                decoration: BoxDecoration(
+                    color: AppColors.orangeLight,
+                    borderRadius: BorderRadius.circular(11)),
+                child: const Icon(Icons.quiz_rounded,
+                    color: AppColors.orange, size: 19),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text(k.judul, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
-                    LevelPill(level: k.level),
-                  ]),
-                  const SizedBox(height: 2),
-                  Text(m != null ? '${m.bab} — ${m.judul}' : 'Belum terkait materi', style: const TextStyle(fontSize: 11.5, color: AppColors.muted)),
-                  const SizedBox(height: 6),
-                  Wrap(spacing: 6, runSpacing: 4, children: [
-                    Text('${k.soal.length} soal', style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
-                    if (adaGambar > 0) Text('🖼 $adaGambar bergambar', style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
-                    Text('oleh ${k.oleh}', style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
-                  ]),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text(k.judul,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13.5))),
+                        LevelPill(level: k.level),
+                      ]),
+                      const SizedBox(height: 2),
+                      Text(
+                          m != null
+                              ? '${m.bab} — ${m.judul}'
+                              : 'Belum terkait materi',
+                          style: const TextStyle(
+                              fontSize: 11.5, color: AppColors.muted)),
+                      const SizedBox(height: 6),
+                      Wrap(spacing: 6, runSpacing: 4, children: [
+                        Text('${k.jumlahSoal} soal',
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AppColors.muted)),
+                        Text(k.kategori,
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AppColors.muted)),
+                        Text(k.statusPublikasi,
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AppColors.muted)),
+                        Text('oleh ${k.oleh}',
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AppColors.muted)),
+                      ]),
+                    ]),
               ),
             ]),
             const SizedBox(height: 10),
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => KuisDetailScreen(kuisId: k.id))),
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => KuisDetailScreen(kuisId: k.id))),
                   icon: const Icon(Icons.visibility_outlined, size: 16),
                   label: const Text('Soal', style: TextStyle(fontSize: 12)),
                 ),
@@ -104,7 +138,12 @@ class _KuisManageCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => KuisFormScreen(kuisId: k.id))),
+                  onPressed: k.statusPublikasi == 'draft'
+                      ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => KuisFormScreen(kuisId: k.id)))
+                      : null,
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Edit', style: TextStyle(fontSize: 12)),
                 ),
@@ -112,7 +151,9 @@ class _KuisManageCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.red, side: const BorderSide(color: AppColors.redLight)),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.red,
+                      side: const BorderSide(color: AppColors.redLight)),
                   onPressed: () => _hapus(context),
                   icon: const Icon(Icons.delete_outline, size: 16),
                   label: const Text('Hapus', style: TextStyle(fontSize: 12)),

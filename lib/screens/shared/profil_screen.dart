@@ -17,6 +17,11 @@ class ProfilScreen extends StatelessWidget {
     final roleLabel =
         user.role == UserRole.siswa ? 'Siswa' : 'Guru Pengampu TIK';
     final color = RoleColors.of(user.role.value);
+    final ImageProvider<Object>? fotoProvider = user.foto != null
+        ? MemoryImage(user.foto!) as ImageProvider<Object>
+        : user.fotoUrl != null
+            ? NetworkImage(user.fotoUrl!) as ImageProvider<Object>
+            : null;
 
     return Scaffold(
       appBar: simpleAppBar('Profil'),
@@ -30,9 +35,8 @@ class ProfilScreen extends StatelessWidget {
                 CircleAvatar(
                     radius: 32,
                     backgroundColor: color,
-                    backgroundImage:
-                        user.foto != null ? MemoryImage(user.foto!) : null,
-                    child: user.foto != null
+                    backgroundImage: fotoProvider,
+                    child: fotoProvider != null
                         ? null
                         : Text(user.initials,
                             style: const TextStyle(
@@ -72,7 +76,7 @@ class ProfilScreen extends StatelessWidget {
                       fontSize: 13.5,
                     ),
                   ),
-                  subtitle: const Text('Foto profil, NISN/NIP, kata sandi',
+                  subtitle: const Text('Ubah kata sandi',
                       style: TextStyle(fontSize: 11.5)),
                   trailing: const Icon(
                     Icons.chevron_right,

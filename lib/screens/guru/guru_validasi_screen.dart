@@ -18,25 +18,23 @@ class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
   _Filter _filter = _Filter.semua;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AppProvider>().loadNilaiGuru();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
 
     final lulus = app.hasilList.where((h) => !h.dibawahKkm).toList();
     final tidakLulus = app.hasilList.where((h) => h.dibawahKkm).toList();
 
-    // Yang lulus otomatis divalidasi (hanya yang belum, jadi tidak looping)
-    final belumValid =
-        lulus.where((h) => h.status != StatusValidasi.divalidasi).toList();
-    if (belumValid.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        for (final h in belumValid) {
-          app.validasiNilai(h.id);
-        }
-      });
-    }
-
-    final menunggu =
-        tidakLulus.where((h) => h.status != StatusValidasi.divalidasi).length;
+    final perluRemedial = tidakLulus
+        .where((h) => !h.remedialDitugaskan && !h.remedialSelesai)
+        .length;
 
     final List<HasilKuis> tampil;
     final String intro;
@@ -51,7 +49,7 @@ class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
       case _Filter.tidakLulus:
         tampil = tidakLulus;
         intro =
-            'Siswa dengan nilai di bawah KKM ($menunggu menunggu validasi). Validasi nilai dan tugaskan remedial.';
+            'Siswa dengan nilai di bawah KKM. $perluRemedial siswa belum mendapat tugas remedial.';
         kosong = 'Tidak ada siswa di bawah KKM. 🎉';
         break;
       case _Filter.semua:
@@ -65,48 +63,100 @@ class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
     return Scaffold(
       appBar: simpleAppBar('Validasi & Remedial'),
       body: SafeArea(
-        child: app.hasilList.isEmpty
-            ? const EmptyState(text: 'Belum ada nilai kuis yang masuk.')
-            : Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                    child: Row(
-                      children: [
-                        _FilterChipKecil(
-                          label: 'Semua (${app.hasilList.length})',
-                          selected: _filter == _Filter.semua,
-                          color: AppColors.blue,
-                          onTap: () => setState(() => _filter = _Filter.semua),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChipKecil(
-                          label: 'Lulus (${lulus.length})',
-                          selected: _filter == _Filter.lulus,
-                          color: AppColors.green,
-                          onTap: () => setState(() => _filter = _Filter.lulus),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterChipKecil(
-                          label: 'Tidak Lulus (${tidakLulus.length})',
-                          selected: _filter == _Filter.tidakLulus,
-                          color: AppColors.red,
-                          onTap: () =>
-                              setState(() => _filter = _Filter.tidakLulus),
-                        ),
-                      ],
+        child: app.nilaiLoading && app.hasilList.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : app.nilaiLoadError != null && app.hasilList.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Nilai kuis gagal dimuat.'),
+                          const SizedBox(height: 8),
+                          Text(
+                            app.nilaiLoadError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 12, color: AppColors.muted),
+                          ),
+                          TextButton.icon(
+                            onPressed:
+                                app.nilaiLoading ? null : app.loadNilaiGuru,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Coba lagi'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: _DaftarHasil(
-                      list: tampil,
-                      app: app,
-                      intro: intro,
-                      kosong: kosong,
-                    ),
-                  ),
-                ],
-              ),
+                  )
+                : app.hasilList.isEmpty
+                    ? RefreshIndicator(
+                        onRefresh: app.loadNilaiGuru,
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(
+                              height: 300,
+                              child: EmptyState(
+                                  text: 'Belum ada nilai kuis yang masuk.'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          if (app.nilaiLoadError != null)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                'Gagal memperbarui nilai: ${app.nilaiLoadError}',
+                                style: const TextStyle(color: AppColors.red),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                            child: Row(
+                              children: [
+                                _FilterChipKecil(
+                                  label: 'Semua (${app.hasilList.length})',
+                                  selected: _filter == _Filter.semua,
+                                  color: AppColors.blue,
+                                  onTap: () =>
+                                      setState(() => _filter = _Filter.semua),
+                                ),
+                                const SizedBox(width: 8),
+                                _FilterChipKecil(
+                                  label: 'Lulus (${lulus.length})',
+                                  selected: _filter == _Filter.lulus,
+                                  color: AppColors.green,
+                                  onTap: () =>
+                                      setState(() => _filter = _Filter.lulus),
+                                ),
+                                const SizedBox(width: 8),
+                                _FilterChipKecil(
+                                  label: 'Tidak Lulus (${tidakLulus.length})',
+                                  selected: _filter == _Filter.tidakLulus,
+                                  color: AppColors.red,
+                                  onTap: () => setState(
+                                      () => _filter = _Filter.tidakLulus),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: RefreshIndicator(
+                              onRefresh: app.loadNilaiGuru,
+                              child: _DaftarHasil(
+                                list: tampil,
+                                app: app,
+                                intro: intro,
+                                kosong: kosong,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
       ),
     );
   }
@@ -162,7 +212,17 @@ class _DaftarHasil extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (list.isEmpty) return EmptyState(text: kosong);
+    if (list.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: 300,
+            child: EmptyState(text: kosong),
+          ),
+        ],
+      );
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
@@ -175,33 +235,108 @@ class _DaftarHasil extends StatelessWidget {
   }
 }
 
-class _ValidasiCard extends StatelessWidget {
+class _ValidasiCard extends StatefulWidget {
   final HasilKuis hasil;
   final AppProvider app;
   const _ValidasiCard({required this.hasil, required this.app});
 
+  @override
+  State<_ValidasiCard> createState() => _ValidasiCardState();
+}
+
+class _ValidasiCardState extends State<_ValidasiCard> {
+  bool _assigning = false;
+
   Future<void> _tugaskanRemedial(BuildContext context) async {
-    final ok = await confirmDialog(
+    final hasil = widget.hasil;
+    setState(() => _assigning = true);
+    try {
+      final remedials = await widget.app.remedialUntukKuis(hasil.kuisId);
+      if (remedials.isEmpty) {
+        throw StateError(
+          'Belum ada kuis kategori Remedial untuk "${hasil.kuis}". Buat kuis remedial dengan kuis asal yang sesuai terlebih dahulu.',
+        );
+      }
+
+      final tersedia = remedials.where((remedial) {
+        final kuis = remedial['kuis_remedial'];
+        return kuis is Map &&
+            kuis['status_publikasi'] == 'terbit' &&
+            kuis['is_aktif'] == true;
+      }).toList();
+      if (tersedia.isEmpty) {
+        throw StateError(
+          'Kuis remedial untuk "${hasil.kuis}" belum diterbitkan atau sudah tidak aktif.',
+        );
+      }
+
+      final terpilih = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Pilih kuis remedial'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: tersedia.map((remedial) {
+                final kuis =
+                    Map<String, dynamic>.from(remedial['kuis_remedial'] as Map);
+                return ListTile(
+                  title: Text('${kuis['judul'] ?? 'Kuis remedial'}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(dialogContext, remedial),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+          ],
+        ),
+      );
+      if (terpilih == null || !context.mounted) return;
+
+      final kuisTerpilih =
+          Map<String, dynamic>.from(terpilih['kuis_remedial'] as Map);
+      final remedialId = terpilih['id_remedial']?.toString();
+      if (remedialId == null || remedialId.isEmpty) {
+        throw const FormatException('ID tugas remedial tidak ditemukan.');
+      }
+
+      final ok = await confirmDialog(
         context,
-        'Tugaskan kuis remedial "${hasil.kuis}" untuk ${hasil.siswa}?\n\nSiswa akan melihat notifikasi di Beranda untuk mengerjakan ulang.');
-    if (ok) {
-      app.tugaskanRemedial(hasil.id);
+        'Tugaskan "${kuisTerpilih['judul'] ?? 'kuis remedial'}" kepada ${hasil.siswa}?',
+      );
+      if (!ok || !context.mounted) return;
+
+      await widget.app.tugaskanRemedial(hasil.id, remedialId);
       if (context.mounted) {
         showAppToast(context, 'Remedial ditugaskan ke ${hasil.siswa} ✔');
       }
+    } catch (error) {
+      if (context.mounted) {
+        showAppToast(context, 'Gagal menugaskan remedial: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _assigning = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final h = hasil;
+    final h = widget.hasil;
     final dibawahKkm = h.dibawahKkm;
-    final sudahValid = !dibawahKkm || h.status == StatusValidasi.divalidasi;
-    final kuisRef = app.kuisById(h.kuisId);
+    final kuisRef = widget.app.kuisById(h.kuisId);
     final alokasi = kuisRef?.waktu ?? 10;
-    final rasio = h.durasi / (alokasi * 60);
-    final kecepatanLabel =
-        rasio <= 0.6 ? '⚡ Cepat' : rasio <= 1.0 ? 'Sesuai alokasi' : '🐢 Lambat';
+    final rasio = (h.durasi ?? 0) / (alokasi * 60);
+    final kecepatanLabel = rasio <= 0.6
+        ? '⚡ Cepat'
+        : rasio <= 1.0
+            ? 'Sesuai alokasi'
+            : '🐢 Lambat';
     final kecepatanColor = rasio <= 0.6
         ? AppColors.green
         : rasio <= 1.0
@@ -232,7 +367,7 @@ class _ValidasiCard extends StatelessWidget {
                                 fontSize: 11, color: AppColors.muted)),
                       ]),
                 ),
-                Text('${h.nilai}',
+                Text(formatSkor(h.nilai),
                     style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
@@ -244,80 +379,71 @@ class _ValidasiCard extends StatelessWidget {
               LevelPill(level: h.level),
               dibawahKkm
                   ? AppPill(
-                      label: '↓ KKM ${h.kkm}',
+                      label: '↓ KKM ${formatSkor(h.kkm)}',
                       color: AppColors.red,
                       background: AppColors.redLight)
                   : AppPill(
-                      label: '✔ KKM ${h.kkm}',
+                      label: '✔ KKM ${formatSkor(h.kkm)}',
                       color: AppColors.green,
                       background: AppColors.greenLight),
-              Text('⏱ ${fmtWaktu(h.durasi)}',
-                  style:
-                      const TextStyle(fontSize: 11, color: AppColors.muted)),
+              if (h.durasi != null) ...[
+                Text(
+                  '${fmtWaktu(h.durasi!)}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
+                ),
+                AppPill(
+                    label: kecepatanLabel,
+                    color: kecepatanColor,
+                    background: kecepatanColor.withOpacity(.12)),
+              ],
               AppPill(
-                  label: kecepatanLabel,
-                  color: kecepatanColor,
-                  background: kecepatanColor.withOpacity(.12)),
-              AppPill(
-                label: sudahValid ? 'Tervalidasi' : 'Menunggu Validasi',
-                color: sudahValid ? AppColors.green : const Color(0xFFB9701C),
-                background:
-                    sudahValid ? AppColors.greenLight : const Color(0xFFFFF1E2),
+                label:
+                    dibawahKkm ? 'Di bawah KKM' : 'Tervalidasi Otomatis',
+                color: dibawahKkm ? AppColors.red : AppColors.green,
+                background: dibawahKkm
+                    ? AppColors.redLight
+                    : AppColors.greenLight,
               ),
             ]),
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(
-                child: sudahValid
-                    ? _StaticBadge(
-                        label: dibawahKkm ? 'Sudah Valid' : 'Valid Otomatis',
+            if (dibawahKkm)
+              SizedBox(
+                width: double.infinity,
+                child: h.remedialSelesai
+                    ? const _StaticBadge(
+                        label: 'Remedial Selesai',
                         color: AppColors.green,
                         bg: AppColors.greenLight)
-                    : OutlinedButton.icon(
-                        onPressed: () {
-                          app.validasiNilai(h.id);
-                          showAppToast(
-                              context, 'Nilai siswa telah divalidasi ✔');
-                        },
-                        icon: const Icon(Icons.check_circle_outline, size: 17),
-                        label: const Text('Validasi',
-                            style: TextStyle(fontSize: 12.5)),
-                      ),
+                    : h.remedialDitugaskan
+                        ? const _StaticBadge(
+                            label: 'Remedial Ditugaskan',
+                            color: AppColors.red,
+                            bg: AppColors.redLight)
+                        : ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.red),
+                            onPressed: _assigning
+                                ? null
+                                : () => _tugaskanRemedial(context),
+                            icon: _assigning
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.error_outline, size: 17),
+                            label: Text(
+                                _assigning ? 'Menyimpan...' : 'Remedial',
+                                style: const TextStyle(fontSize: 12.5)),
+                          ),
+              )
+            else
+              const _StaticBadge(
+                label: 'Valid Otomatis',
+                color: AppColors.green,
+                bg: AppColors.greenLight,
               ),
-              if (dibawahKkm) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: h.remedialSelesai
-                      ? const _StaticBadge(
-                          label: 'Remedial Selesai',
-                          color: AppColors.green,
-                          bg: AppColors.greenLight)
-                      : h.remedialDitugaskan
-                          ? OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.red,
-                                  side: const BorderSide(
-                                      color: AppColors.redLight)),
-                              onPressed: () {
-                                app.batalkanRemedial(h.id);
-                                showAppToast(
-                                    context, 'Penugasan remedial dibatalkan');
-                              },
-                              icon: const Icon(Icons.close_rounded, size: 17),
-                              label: const Text('Batalkan',
-                                  style: TextStyle(fontSize: 12.5)),
-                            )
-                          : ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.red),
-                              onPressed: () => _tugaskanRemedial(context),
-                              icon: const Icon(Icons.error_outline, size: 17),
-                              label: const Text('Remedial',
-                                  style: TextStyle(fontSize: 12.5)),
-                            ),
-                ),
-              ],
-            ]),
           ],
         ),
       ),

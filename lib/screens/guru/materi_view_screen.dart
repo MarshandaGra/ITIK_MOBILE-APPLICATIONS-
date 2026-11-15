@@ -14,7 +14,8 @@ class MateriViewScreen extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final m = app.materiById(materiId);
     if (m == null) {
-      return const Scaffold(body: Center(child: Text('Materi tidak ditemukan')));
+      return const Scaffold(
+          body: Center(child: Text('Materi tidak ditemukan')));
     }
 
     return Scaffold(
@@ -23,7 +24,9 @@ class MateriViewScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
           children: [
-            Text(m.judul, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            Text(m.judul,
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 3),
             Text('${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
                 style: const TextStyle(fontSize: 12, color: AppColors.muted)),
@@ -39,13 +42,15 @@ class MateriViewScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.picture_as_pdf_rounded, color: AppColors.red, size: 36),
+                  const Icon(Icons.picture_as_pdf_rounded,
+                      color: AppColors.red, size: 36),
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(m.isi,
+                    child: Text(m.pdfUrl ?? 'PDF belum tersedia.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                        style: const TextStyle(
+                            fontSize: 11.5, color: AppColors.muted),
                         maxLines: 6,
                         overflow: TextOverflow.ellipsis),
                   ),
@@ -56,7 +61,9 @@ class MateriViewScreen extends StatelessWidget {
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: m.pdfUrl == null
+                      ? null
+                      : () => openPdfUrl(context, m.pdfUrl),
                   icon: const Icon(Icons.open_in_new_rounded, size: 17),
                   label: const Text('Buka Penuh'),
                 ),
@@ -64,7 +71,10 @@ class MateriViewScreen extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MateriFormScreen(materiId: m.id))),
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => MateriFormScreen(materiId: m.id))),
                   icon: const Icon(Icons.edit_outlined, size: 17),
                   label: const Text('Edit'),
                 ),

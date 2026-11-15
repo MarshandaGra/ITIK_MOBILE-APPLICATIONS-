@@ -11,7 +11,14 @@ import 'kuis_result_screen.dart';
 class KuisPlayScreen extends StatefulWidget {
   final Kuis kuis;
   final String? remedialOfId;
-  const KuisPlayScreen({super.key, required this.kuis, this.remedialOfId});
+  final bool serverManaged;
+
+  const KuisPlayScreen({
+    super.key,
+    required this.kuis,
+    this.remedialOfId,
+    this.serverManaged = false,
+  });
 
   @override
   State<KuisPlayScreen> createState() => _KuisPlayScreenState();
@@ -30,13 +37,27 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
   late final DateTime startedAt;
 
   Timer? _timer;
-  int sisa = _detikPerSoal;
+  late int sisa;
   bool _sudahSelesai = false;
+  bool _savingAnswer = false;
+  bool _submitting = false;
+  bool _submitFailed = false;
 
   @override
   void initState() {
     super.initState();
     startedAt = DateTime.now();
+    sisa = widget.serverManaged
+        ? (widget.kuis.batasWaktu
+                    ?.difference(DateTime.now())
+                    .inSeconds ??
+                widget.kuis.waktu * 60)
+            .clamp(1, 1 << 30)
+            .toInt()
+        : _detikPerSoal;
+    selected = widget.kuis.soal.isEmpty
+        ? null
+        : widget.kuis.soal.first.jawabanDipilih;
     if (widget.kuis.soal.isNotEmpty) _mulaiTimer();
   }
 
@@ -66,17 +87,28 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
 
   void _waktuHabis() {
     if (!mounted || _sudahSelesai) return;
+    if (widget.serverManaged) {
+      if (_savingAnswer) {
+        Future<void>.delayed(const Duration(seconds: 1), _waktuHabis);
+        return;
+      }
+      _selesaiServer();
+      return;
+    }
     if (selected == null) {
       showAppToast(context, 'Waktu habis, lanjut ke soal berikutnya');
     }
-    _catatDanLanjut();
+    unawaited(_catatDanLanjut());
   }
 
   // ===== NAVIGASI =====
   Future<void> _keluar() async {
     if (_sudahSelesai) return;
     _timer?.cancel(); // jeda timer selama dialog tampil
-    final ok = await confirmDialog(context, 'Keluar dari kuis? Progres jawaban yang sudah diisi akan hilang.');
+    final message = widget.serverManaged
+        ? 'Keluar dari kuis? Jawaban yang sudah disimpan dapat dilanjutkan kembali sebelum waktu habis.'
+        : 'Keluar dari kuis? Progres jawaban yang sudah diisi akan hilang.';
+    final ok = await confirmDialog(context, message);
     if (!mounted) return;
     if (ok) {
       Navigator.pop(context);
@@ -86,6 +118,11 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
   }
 
   void _lanjut() {
+    if (_submitting || _savingAnswer) return;
+    if (_submitFailed && widget.serverManaged) {
+      _selesaiServer();
+      return;
+    }
     if (selected == null) {
       showAppToast(context, 'Pilih salah satu jawaban dulu');
       return;
@@ -94,18 +131,93 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
   }
 
   /// Menyimpan jawaban (atau "tidak dijawab" bila waktu habis) lalu pindah soal.
-  void _catatDanLanjut() {
-    if (_sudahSelesai) return;
+  Future<void> _catatDanLanjut() async {
+    if (_sudahSelesai || _savingAnswer || _submitting) return;
+    final currentQuestion = widget.kuis.soal[index];
+    if (widget.serverManaged) {
+      final questionId = currentQuestion.id;
+      if (questionId == null) {
+        showAppToast(context, 'ID soal tidak tersedia. Muat ulang kuis.');
+        return;
+      }
+      setState(() => _savingAnswer = true);
+      try {
+        await context.read<AppProvider>().simpanJawabanSiswa(
+              widget.kuis.id,
+              questionId,
+              selected,
+            );
+        currentQuestion.jawabanDipilih = selected;
+      } catch (error) {
+        if (mounted) showAppToast(context, 'Gagal menyimpan jawaban: $error');
+        return;
+      } finally {
+        if (mounted) setState(() => _savingAnswer = false);
+      }
+    }
+
     answers.add(selected ?? _tidakDijawab);
     if (index < widget.kuis.soal.length - 1) {
       setState(() {
         index++;
-        selected = null;
-        sisa = _detikPerSoal;
+        selected = widget.kuis.soal[index].jawabanDipilih;
+        if (!widget.serverManaged) sisa = _detikPerSoal;
       });
-      _mulaiTimer();
+      if (!widget.serverManaged) _mulaiTimer();
     } else {
-      _selesai();
+      if (widget.serverManaged) {
+        await _selesaiServer(saveCurrentAnswer: false);
+      } else {
+        _selesai();
+      }
+    }
+  }
+
+  Future<void> _selesaiServer({bool saveCurrentAnswer = true}) async {
+    if (_sudahSelesai || _submitting) return;
+    _timer?.cancel();
+    setState(() {
+      _submitting = true;
+      _submitFailed = false;
+    });
+
+    try {
+      final currentQuestion = widget.kuis.soal[index];
+      if (saveCurrentAnswer && selected != null && currentQuestion.id != null) {
+        try {
+          await context.read<AppProvider>().simpanJawabanSiswa(
+                widget.kuis.id,
+                currentQuestion.id!,
+                selected,
+              );
+        } catch (error) {
+          debugPrint('Jawaban terakhir tidak sempat disimpan: $error');
+        }
+      }
+
+      final score =
+          await context.read<AppProvider>().kumpulkanKuisSiswa(widget.kuis.id);
+      if (!mounted) return;
+      _sudahSelesai = true;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KuisResultScreen(
+            kuis: widget.kuis,
+            nilai: score,
+            benar: 0,
+            salah: 0,
+            jawabanSiswa: const [],
+            serverGraded: true,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitFailed = true);
+      showAppToast(context, 'Gagal mengumpulkan kuis: $error');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -135,7 +247,7 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
     );
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => KuisResultScreen(kuis: k, nilai: nilai, benar: benar, salah: salah, jawabanSiswa: List<int>.from(answers),)),
+      MaterialPageRoute(builder: (_) => KuisResultScreen(kuis: k, nilai: nilai.toDouble(), benar: benar, salah: salah, jawabanSiswa: List<int>.from(answers),)),
     );
   }
 
@@ -207,7 +319,9 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
                   padding: const EdgeInsets.only(bottom: 10),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () => setState(() => selected = i),
+                    onTap: _savingAnswer || _submitting
+                        ? null
+                        : () => setState(() => selected = i),
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -239,8 +353,18 @@ class _KuisPlayScreenState extends State<KuisPlayScreen> {
               }),
               const SizedBox(height: 6),
               ElevatedButton(
-                onPressed: _lanjut,
-                child: Text(index < k.soal.length - 1 ? 'Soal Berikutnya' : 'Selesai & Lihat Nilai'),
+                onPressed: _savingAnswer || _submitting ? null : _lanjut,
+                child: Text(
+                  _submitting
+                      ? 'Mengirim jawaban...'
+                      : _savingAnswer
+                          ? 'Menyimpan jawaban...'
+                          : _submitFailed
+                              ? 'Coba kirim ulang'
+                              : index < k.soal.length - 1
+                                  ? 'Soal Berikutnya'
+                                  : 'Selesai & Lihat Nilai',
+                ),
               ),
             ],
           ),

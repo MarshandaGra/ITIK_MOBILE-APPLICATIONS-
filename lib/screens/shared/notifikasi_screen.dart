@@ -8,8 +8,27 @@ import '../../widgets/shared_widgets.dart';
 import '../guru/guru_validasi_screen.dart';
 import '../siswa/kuis_play_screen.dart';
 
-class NotifikasiScreen extends StatelessWidget {
+class NotifikasiScreen extends StatefulWidget {
   const NotifikasiScreen({super.key});
+
+  @override
+  State<NotifikasiScreen> createState() => _NotifikasiScreenState();
+}
+
+class _NotifikasiScreenState extends State<NotifikasiScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final app = context.read<AppProvider>();
+      if (app.currentUser?.role == UserRole.siswa) {
+        app.loadNilaiSiswa();
+      } else if (app.currentUser?.role == UserRole.guru) {
+        app.loadNilaiGuru();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,106 +48,137 @@ class NotifikasiScreen extends StatelessWidget {
                 h.remedialDitugaskan &&
                 !h.remedialSelesai)
             .toList()
-        // Guru: hanya yang di bawah KKM & belum divalidasi (yang lulus otomatis valid)
+        // Guru: hanya nilai di bawah KKM yang belum ditugaskan remedial.
         : app.hasilList
             .where((h) =>
-                h.dibawahKkm && h.status != StatusValidasi.divalidasi)
+                h.dibawahKkm && !h.remedialDitugaskan && !h.remedialSelesai)
             .toList();
 
     return Scaffold(
       appBar: simpleAppBar('Notifikasi'),
       body: SafeArea(
-        child: items.isEmpty
-            ? const EmptyState(text: 'Belum ada notifikasi baru.')
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                itemCount: items.length,
-                itemBuilder: (context, i) {
-                  final h = items[i];
-                  if (isSiswa) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: NoticeBox(
-                        title: 'Remedial Ditugaskan Guru',
-                        color: AppColors.red,
-                        background: AppColors.redLight,
-                        borderColor: const Color(0xFFF6C6C8),
-                        message:
-                            'Nilai kamu (${h.nilai}) pada ${h.kuis} belum mencapai KKM (${h.kkm}). Gurumu menugaskan kamu mengerjakan ulang kuis ini.',
-                        action: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.red),
-                            onPressed: () {
-                              final kuis = app.kuisById(h.kuisId);
-                              if (kuis != null) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => KuisPlayScreen(
-                                        kuis: kuis, remedialOfId: h.id),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.trending_up, size: 18),
-                            label: const Text('Kerjakan Remedial Sekarang'),
+        child: RefreshIndicator(
+          onRefresh: isSiswa ? app.loadNilaiSiswa : app.loadNilaiGuru,
+          child: items.isEmpty
+              ? ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(
+                      height: 300,
+                      child: EmptyState(text: 'Belum ada notifikasi baru.'),
+                    ),
+                  ],
+                )
+              : ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final h = items[i];
+                    if (isSiswa) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: NoticeBox(
+                          title: 'Remedial Ditugaskan Guru',
+                          color: AppColors.red,
+                          background: AppColors.redLight,
+                          borderColor: const Color(0xFFF6C6C8),
+                          message:
+                              'Nilai kamu (${formatSkor(h.nilai)}) pada ${h.kuis} belum mencapai KKM (${formatSkor(h.kkm)}). Gurumu menugaskan ${h.kuisRemedial?.judul ?? 'kuis remedial'} untuk kamu.',
+                          action: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.red),
+                              onPressed: () async {
+                                if (h.idKuisRemedial == null ||
+                                    !h.remedialKuisTersedia) {
+                                  showAppToast(
+                                    context,
+                                    'Kuis remedial belum diterbitkan atau tidak tersedia.',
+                                  );
+                                  return;
+                                }
+                                try {
+                                  final kuis = await app
+                                      .mulaiKuisSiswa(h.idKuisRemedial!);
+                                  if (!context.mounted) return;
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => KuisPlayScreen(
+                                        kuis: kuis,
+                                        remedialOfId: h.id,
+                                        serverManaged: true,
+                                      ),
+                                    ),
+                                  );
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    showAppToast(context,
+                                        'Gagal membuka kuis remedial: $error');
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.trending_up, size: 18),
+                              label: const Text('Kerjakan Remedial Sekarang'),
+                            ),
                           ),
                         ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 11),
+                      child: AppCard(
+                        child: Column(children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(h.siswa,
+                                          style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                          '${h.tanggal} • ${h.kuis} — di bawah KKM, perlu remedial',
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.muted)),
+                                    ]),
+                              ),
+                              Text('${h.nilai}',
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.red)),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const GuruValidasiScreen()),
+                              ),
+                              icon: const Icon(Icons.check_circle_outline,
+                                  size: 18),
+                              label: const Text('Buka Remedial'),
+                            ),
+                          ),
+                        ]),
                       ),
                     );
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 11),
-                    child: AppCard(
-                      child: Column(children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(h.siswa,
-                                        style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700)),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                        '${h.tanggal} • ${h.kuis} — di bawah KKM, menunggu validasi',
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.muted)),
-                                  ]),
-                            ),
-                            Text('${h.nilai}',
-                                style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.red)),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const GuruValidasiScreen()),
-                            ),
-                            icon: const Icon(Icons.check_circle_outline,
-                                size: 18),
-                            label: const Text('Buka Validasi'),
-                          ),
-                        ),
-                      ]),
-                    ),
-                  );
-                },
-              ),
+                  },
+                ),
+        ),
       ),
     );
   }

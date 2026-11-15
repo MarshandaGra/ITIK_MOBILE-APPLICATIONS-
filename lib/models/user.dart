@@ -22,6 +22,7 @@ class AppUser {
   final String? kelas;
   String? induk; // NISN untuk siswa, NIP untuk guru
   Uint8List? foto;
+  String? fotoUrl;
 
   AppUser({
     required this.id,
@@ -32,6 +33,7 @@ class AppUser {
     this.kelas,
     this.induk,
     this.foto,
+    this.fotoUrl,
   });
 
   String get initials {

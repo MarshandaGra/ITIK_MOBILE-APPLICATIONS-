@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/user.dart';
-import '../../models/hasil_kuis.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import '../shared/notifikasi_screen.dart';
@@ -23,18 +22,22 @@ class GuruHomeScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Yang lulus otomatis valid, jadi hanya hitung yang di bawah KKM & belum divalidasi
+    // Hitung siswa yang nilainya di bawah KKM dan belum mendapat remedial.
     final pending = app.hasilList
-        .where((h) => h.dibawahKkm && h.status != StatusValidasi.divalidasi)
+        .where((h) =>
+            h.dibawahKkm && !h.remedialDitugaskan && !h.remedialSelesai)
         .length;
-    // CATATAN: "+ 2" dari kode aslimu dipertahankan (sepertinya penyesuaian data dummy).
-    final totalSiswa =
-        app.users.where((u) => u.role == UserRole.siswa).length + 2;
+    final totalSiswa = app.users.where((u) => u.role == UserRole.siswa).length;
     final totalKuis = app.kuisList.length;
     final totalMateri = app.materiList.length;
 
     // Antisipasi: nama kosong
     final nama = user.nama.trim().isEmpty ? 'Guru' : user.nama.trim();
+    final ImageProvider<Object>? fotoProvider = user.foto != null
+        ? MemoryImage(user.foto!) as ImageProvider<Object>
+        : user.fotoUrl != null
+            ? NetworkImage(user.fotoUrl!) as ImageProvider<Object>
+            : null;
 
     return Scaffold(
       body: SafeArea(
@@ -90,10 +93,8 @@ class GuruHomeScreen extends StatelessWidget {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.white24,
-                                      backgroundImage: user.foto != null
-                                          ? MemoryImage(user.foto!)
-                                          : null,
-                                      child: user.foto != null
+                                      backgroundImage: fotoProvider,
+                                      child: fotoProvider != null
                                           ? null
                                           : Text(
                                               user.initials,
@@ -160,7 +161,7 @@ class GuruHomeScreen extends StatelessWidget {
                                 Expanded(
                                     child: _StatCard(
                                         value: '$pending',
-                                        label: 'Perlu Validasi')),
+                                        label: 'Perlu Remedial')),
                               ],
                             ),
                           ],
@@ -183,7 +184,7 @@ class GuruHomeScreen extends StatelessWidget {
                     iconColor: AppColors.green,
                     iconBg: AppColors.greenLight,
                     title: 'Validasi Nilai Siswa',
-                    subtitle: '$pending nilai menunggu validasi',
+                    subtitle: '$pending siswa di bawah KKM perlu remedial',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(

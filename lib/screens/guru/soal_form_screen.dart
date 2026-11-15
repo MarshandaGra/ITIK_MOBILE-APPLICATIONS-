@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/app_provider.dart';
 import '../../models/kuis.dart';
+import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
-/// Form tambah/edit soal. Jika [index] diisi -> mode edit soal ke-[index]
-/// pada kuis [kuisId].
 class SoalFormScreen extends StatefulWidget {
   final String kuisId;
   final int? index;
+
   const SoalFormScreen({super.key, required this.kuisId, this.index});
 
   @override
@@ -17,194 +16,238 @@ class SoalFormScreen extends StatefulWidget {
 }
 
 class _SoalFormScreenState extends State<SoalFormScreen> {
-  late final TextEditingController pertanyaanCtrl;
-  late final TextEditingController aCtrl, bCtrl, cCtrl, dCtrl;
-  int jawaban = 0;
-  String? gambar;
+  static const _difficultyLevels = ['mudah', 'sedang', 'sulit'];
+  static const _letters = ['A', 'B', 'C', 'D', 'E'];
+
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _questionController;
+  late final TextEditingController _weightController;
+  late final List<TextEditingController> _optionControllers;
+  int _answer = 0;
+  String? _difficulty;
+  bool _saving = false;
 
   bool get isEdit => widget.index != null;
 
   @override
   void initState() {
     super.initState();
-    final app = context.read<AppProvider>();
-    final k = app.kuisById(widget.kuisId);
-    final existing = (isEdit && k != null) ? k.soal[widget.index!] : null;
-    String opsiAt(int i) => (existing != null && i < existing.opsi.length) ? existing.opsi[i] : '';
-    pertanyaanCtrl = TextEditingController(text: existing?.pertanyaan ?? '');
-    aCtrl = TextEditingController(text: opsiAt(0));
-    bCtrl = TextEditingController(text: opsiAt(1));
-    cCtrl = TextEditingController(text: opsiAt(2));
-    dCtrl = TextEditingController(text: opsiAt(3));
-    jawaban = existing?.jawaban ?? 0;
-    gambar = existing?.gambar;
+    final quiz = context.read<AppProvider>().kuisById(widget.kuisId);
+    final existing = isEdit && quiz != null ? quiz.soal[widget.index!] : null;
+    String optionAt(int index) =>
+        existing != null && index < existing.opsi.length
+            ? existing.opsi[index]
+            : '';
+    _questionController =
+        TextEditingController(text: existing?.pertanyaan ?? '');
+    _optionControllers = List.generate(
+        5, (index) => TextEditingController(text: optionAt(index)));
+    _weightController = TextEditingController(
+      text: existing?.bobot.toString() ?? _defaultWeight(quiz),
+    );
+    _answer = existing?.jawaban ?? 0;
+    _difficulty = _difficultyLevels.contains(existing?.tingkatKesulitan)
+        ? existing!.tingkatKesulitan
+        : null;
+  }
+
+  String _defaultWeight(Kuis? quiz) {
+    final remaining = 100 -
+        (quiz?.soal
+                .fold<double>(0, (total, question) => total + question.bobot) ??
+            0);
+    return (remaining > 0 ? remaining : 1).toStringAsFixed(2);
   }
 
   @override
   void dispose() {
-    pertanyaanCtrl.dispose();
-    aCtrl.dispose();
-    bCtrl.dispose();
-    cCtrl.dispose();
-    dCtrl.dispose();
+    _questionController.dispose();
+    _weightController.dispose();
+    for (final controller in _optionControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  void _pilihGambar() {
-    // Placeholder pemilihan gambar — sambungkan ke `image_picker` saat integrasi backend.
-    setState(() => gambar = 'gambar_soal_contoh.png');
-    showAppToast(context, 'Gambar ditambahkan (contoh) ✔');
-  }
-
-  void _simpan() {
-    if (pertanyaanCtrl.text.trim().isEmpty || aCtrl.text.trim().isEmpty || bCtrl.text.trim().isEmpty) {
-      showAppToast(context, 'Pertanyaan serta opsi A & B wajib diisi');
+  Future<void> _simpan() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    final quiz = context.read<AppProvider>().kuisById(widget.kuisId);
+    if (quiz == null) {
+      showAppToast(context, 'Kuis tidak ditemukan. Muat ulang data.');
       return;
     }
-    final soal = Soal(
-      pertanyaan: pertanyaanCtrl.text,
-      opsi: [aCtrl.text, bCtrl.text, cCtrl.text.isEmpty ? '-' : cCtrl.text, dCtrl.text.isEmpty ? '-' : dCtrl.text],
-      jawaban: jawaban,
-      gambar: gambar,
-    );
-    final app = context.read<AppProvider>();
-    if (isEdit) {
-      app.editSoal(widget.kuisId, widget.index!, soal);
-      showAppToast(context, 'Soal berhasil diperbarui ✔');
-    } else {
-      app.tambahSoal(widget.kuisId, soal);
-      showAppToast(context, 'Soal berhasil ditambahkan ✔');
+    if (quiz.statusPublikasi != 'draft') {
+      showAppToast(context, 'Soal pada kuis terbit tidak dapat diubah.');
+      return;
     }
-    Navigator.pop(context);
+
+    final soal = Soal(
+      id: isEdit ? quiz.soal[widget.index!].id : null,
+      pertanyaan: _questionController.text.trim(),
+      opsi: _optionControllers
+          .map((controller) => controller.text.trim())
+          .toList(),
+      jawaban: _answer,
+      bobot: double.parse(_weightController.text),
+      tingkatKesulitan: _difficulty ?? '',
+    );
+
+    setState(() => _saving = true);
+    try {
+      final app = context.read<AppProvider>();
+      if (isEdit) {
+        await app.editSoal(widget.kuisId, widget.index!, soal);
+      } else {
+        await app.tambahSoal(widget.kuisId, soal);
+      }
+      if (!mounted) return;
+      showAppToast(context,
+          isEdit ? 'Soal berhasil diperbarui.' : 'Soal berhasil ditambahkan.');
+      Navigator.pop(context);
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal menyimpan soal: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final k = app.kuisById(widget.kuisId);
-
+    final quiz = context.watch<AppProvider>().kuisById(widget.kuisId);
     return Scaffold(
       appBar: simpleAppBar(isEdit ? 'Edit Soal' : 'Tambah Soal'),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          children: [
-            if (k != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text.rich(TextSpan(
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            children: [
+              if (quiz != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('Kuis: ${quiz.judul}',
+                      style: const TextStyle(
+                          fontSize: 12.5, color: AppColors.muted)),
+                ),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const TextSpan(text: 'Kuis: '),
-                    TextSpan(text: k.judul, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.w700)),
-                  ],
-                )),
-              ),
-            AppCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _label('Pertanyaan'),
-                TextField(controller: pertanyaanCtrl, maxLines: 3, decoration: const InputDecoration(hintText: 'Tulis pertanyaan kuis...')),
-                const SizedBox(height: 14),
-                _label('Gambar Soal (opsional)'),
-                if (gambar != null)
-                  Column(children: [
-                    Container(
-                      height: 90,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.image_rounded, color: AppColors.muted, size: 30),
+                    _label('Pertanyaan *'),
+                    TextFormField(
+                      controller: _questionController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                          hintText: 'Tulis pertanyaan kuis...'),
+                      validator: (value) => (value ?? '').trim().isEmpty
+                          ? 'Pertanyaan wajib diisi.'
+                          : null,
+                    ),
+                    const SizedBox(height: 14),
+                    for (var index = 0;
+                        index < _optionControllers.length;
+                        index++) ...[
+                      _label('Opsi ${_letters[index]}${index < 4 ? ' *' : ''}'),
+                      TextFormField(
+                        controller: _optionControllers[index],
+                        maxLength: 255,
+                        validator: (value) =>
+                            index < 4 && (value ?? '').trim().isEmpty
+                                ? 'Opsi ${_letters[index]} wajib diisi.'
+                                : null,
+                      ),
+                      if (index < _optionControllers.length - 1)
+                        const SizedBox(height: 10),
+                    ],
+                    const SizedBox(height: 8),
+                    _label('Jawaban Benar *'),
+                    DropdownButtonFormField<int>(
+                      initialValue: _answer,
+                      items: List.generate(
+                        5,
+                        (index) => DropdownMenuItem(
+                          value: index,
+                          child: Text('Opsi ${_letters[index]}'),
+                        ),
+                      ),
+                      onChanged: (value) =>
+                          setState(() => _answer = value ?? 0),
+                      validator: (value) => value == 4 &&
+                              _optionControllers[4].text.trim().isEmpty
+                          ? 'Isi opsi E atau pilih jawaban A–D.'
+                          : null,
+                    ),
+                    const SizedBox(height: 14),
+                    _label('Bobot (%) *'),
+                    TextFormField(
+                      controller: _weightController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          hintText: 'Total bobot seluruh soal harus 100'),
+                      validator: (value) {
+                        final weight = double.tryParse(value ?? '');
+                        if (weight == null || weight <= 0 || weight > 100) {
+                          return 'Bobot harus lebih dari 0 sampai 100.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    _label('Tingkat Kesulitan'),
+                    DropdownButtonFormField<String?>(
+                      initialValue: _difficulty,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('-- Sesuai Kuis / Bebas --'),
+                        ),
+                        ..._difficultyLevels.map(
+                          (level) => DropdownMenuItem<String?>(
+                            value: level,
+                            child: Text(level),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) =>
+                          setState(() => _difficulty = value),
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.red, side: const BorderSide(color: AppColors.redLight)),
-                        onPressed: () => setState(() => gambar = null),
-                        icon: const Icon(Icons.delete_outline, size: 17),
-                        label: const Text('Hapus Gambar'),
-                      ),
+                    const Text(
+                      'Opsi A–D wajib diisi, opsi E opsional. Total bobot soal harus tepat 100 agar kuis dapat dipublikasikan.',
+                      style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
-                  ])
-                else
-                  InkWell(
-                    onTap: _pilihGambar,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(border: Border.all(color: AppColors.border), borderRadius: BorderRadius.circular(14)),
-                      child: const Column(children: [
-                        Icon(Icons.image_outlined, color: AppColors.muted, size: 24),
-                        SizedBox(height: 6),
-                        Text('Pilih gambar', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
-                        SizedBox(height: 2),
-                        Text('JPG atau PNG • maksimal 5 MB', style: TextStyle(fontSize: 10.5, color: AppColors.muted)),
-                      ]),
-                    ),
-                  ),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Opsi A'),
-                      TextField(controller: aCtrl),
-                    ]),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Opsi B'),
-                      TextField(controller: bCtrl),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Opsi C'),
-                      TextField(controller: cCtrl),
-                    ]),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      _label('Opsi D'),
-                      TextField(controller: dCtrl),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 14),
-                _label('Jawaban Benar'),
-                DropdownButtonFormField<int>(
-                  value: jawaban,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('Opsi A')),
-                    DropdownMenuItem(value: 1, child: Text('Opsi B')),
-                    DropdownMenuItem(value: 2, child: Text('Opsi C')),
-                    DropdownMenuItem(value: 3, child: Text('Opsi D')),
                   ],
-                  onChanged: (v) => setState(() => jawaban = v ?? 0),
-                  decoration: const InputDecoration(),
                 ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
-              onPressed: _simpan,
-              child: Text(isEdit ? 'Simpan Perubahan' : 'Simpan Soal'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
-          ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
+                onPressed: _saving ? null : _simpan,
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(isEdit ? 'Simpan Perubahan' : 'Simpan Soal'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal')),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _label(String s) => Padding(
+  Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(s, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+        child: Text(text,
+            style:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
       );
 }

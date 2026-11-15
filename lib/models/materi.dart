@@ -5,8 +5,10 @@ class Materi {
   String kelas;
   String deskripsi;
   String isi;
+  String? idMapel;
+  String? linkYoutube;
   String pdfName;
-  String? pdfUrl; // path/url file PDF (dummy: null)
+  String? pdfUrl; // path/url file PDF
   String ukuran;
   String oleh;
   String tanggal;
@@ -18,6 +20,8 @@ class Materi {
     required this.kelas,
     required this.deskripsi,
     required this.isi,
+    this.idMapel,
+    this.linkYoutube,
     required this.pdfName,
     this.pdfUrl,
     required this.ukuran,
