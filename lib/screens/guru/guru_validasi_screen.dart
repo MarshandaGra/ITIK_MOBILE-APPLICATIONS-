@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/hasil_kuis.dart';
+import '../../models/kuis.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -16,6 +17,14 @@ class GuruValidasiScreen extends StatefulWidget {
 
 class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
   _Filter _filter = _Filter.semua;
+
+  String _nomorPercobaan(AppProvider app, HasilKuis hasil) {
+    final urutan = app.hasilGuruSaatIni.reversed
+        .where((h) => h.siswaId == hasil.siswaId && h.kuisId == hasil.kuisId)
+        .toList();
+    final index = urutan.indexWhere((h) => h.id == hasil.id);
+    return 'Ke-${index < 0 ? 1 : index + 1}';
+  }
 
   @override
   void initState() {
@@ -61,7 +70,6 @@ class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
     }
 
     return Scaffold(
-      appBar: simpleAppBar('Validasi & Remedial'),
       body: SafeArea(
         child: app.nilaiLoading && app.hasilList.isEmpty
             ? const Center(child: CircularProgressIndicator())
@@ -147,11 +155,13 @@ class _GuruValidasiScreenState extends State<GuruValidasiScreen> {
                           Expanded(
                             child: RefreshIndicator(
                               onRefresh: app.loadNilaiGuru,
-                              child: _DaftarHasil(
-                                list: tampil,
+                              child: _HasilNilaiTable(
+                                hasil: tampil,
                                 app: app,
                                 intro: intro,
                                 kosong: kosong,
+                                nomorPercobaan: (hasil) =>
+                                    _nomorPercobaan(app, hasil),
                               ),
                             ),
                           ),
@@ -167,6 +177,7 @@ class _FilterChipKecil extends StatelessWidget {
   final bool selected;
   final Color color;
   final VoidCallback onTap;
+
   const _FilterChipKecil({
     required this.label,
     required this.selected,
@@ -175,50 +186,147 @@ class _FilterChipKecil extends StatelessWidget {
   });
 
   @override
+  Widget build(BuildContext context) => ActionChip(
+        label: Text(label),
+        onPressed: onTap,
+        backgroundColor: selected ? color.withValues(alpha: 0.12) : null,
+        side: BorderSide(color: selected ? color : AppColors.border),
+      );
+}
+
+class _KelasMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _KelasMetric({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? color : color.withOpacity(.10),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            color: selected ? Colors.white : color,
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.muted, fontSize: 9.5),
           ),
-        ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: valueColor ?? AppColors.text,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _DaftarHasil extends StatelessWidget {
-  final List<HasilKuis> list;
-  final AppProvider app;
-  final String intro;
-  final String kosong;
-  const _DaftarHasil({
-    required this.list,
-    required this.app,
-    required this.intro,
-    required this.kosong,
+class _KelasTerpilihBanner extends StatelessWidget {
+  final String? kelas;
+  final int jumlahSiswa;
+  final double rataNilai;
+  final VoidCallback? onShowAll;
+
+  const _KelasTerpilihBanner({
+    required this.kelas,
+    required this.jumlahSiswa,
+    required this.rataNilai,
+    required this.onShowAll,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (list.isEmpty) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.purpleLight.withValues(alpha: .7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.purpleLight),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.folder_open_rounded,
+              color: AppColors.purple, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  kelas == null
+                      ? 'Menampilkan Data Nilai: Semua Kelas'
+                      : 'Menampilkan Data Nilai: Kelas $kelas',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.purple,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$jumlahSiswa Siswa • Rata-rata Nilai: ${rataNilai.toStringAsFixed(1)}',
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onShowAll != null)
+            TextButton(
+              onPressed: onShowAll,
+              child: const Text(
+                'Semua Kelas',
+                maxLines: 1,
+                style: TextStyle(fontSize: 10),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HasilNilaiTable extends StatelessWidget {
+  final List<HasilKuis> hasil;
+  final AppProvider app;
+  final String intro;
+  final String kosong;
+  final String Function(HasilKuis) nomorPercobaan;
+
+  const _HasilNilaiTable({
+    required this.hasil,
+    required this.app,
+    required this.intro,
+    required this.kosong,
+    required this.nomorPercobaan,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (hasil.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           SizedBox(
             height: 300,
-            child: EmptyState(text: kosong),
+            child: EmptyState(text: this.kosong),
           ),
         ],
       );
@@ -226,10 +334,14 @@ class _DaftarHasil extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
-        Text(intro,
+        Text(this.intro,
             style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
         const SizedBox(height: 12),
-        ...list.map((h) => _ValidasiCard(hasil: h, app: app)),
+        ...hasil.map((h) => _ValidasiCard(
+              hasil: h,
+              app: app,
+              nomorPercobaan: nomorPercobaan(h),
+            )),
       ],
     );
   }
@@ -238,7 +350,12 @@ class _DaftarHasil extends StatelessWidget {
 class _ValidasiCard extends StatefulWidget {
   final HasilKuis hasil;
   final AppProvider app;
-  const _ValidasiCard({required this.hasil, required this.app});
+  final String nomorPercobaan;
+  const _ValidasiCard({
+    required this.hasil,
+    required this.app,
+    required this.nomorPercobaan,
+  });
 
   @override
   State<_ValidasiCard> createState() => _ValidasiCardState();
@@ -446,6 +563,178 @@ class _ValidasiCardState extends State<_ValidasiCard> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EvaluasiButirCard extends StatelessWidget {
+  final int nomor;
+  final Soal soal;
+  final int pilihanSiswa;
+  final String jawabanEsaiSiswa;
+  final bool benar;
+  final double bobot;
+
+  const _EvaluasiButirCard({
+    required this.nomor,
+    required this.soal,
+    required this.pilihanSiswa,
+    required this.jawabanEsaiSiswa,
+    required this.benar,
+    required this.bobot,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final jawabanTersedia =
+        pilihanSiswa >= 0 && pilihanSiswa < soal.opsi.length;
+    final borderColor = benar ? AppColors.green : AppColors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border(
+          left: BorderSide(color: borderColor, width: 4),
+          top: const BorderSide(color: AppColors.border),
+          right: const BorderSide(color: AppColors.border),
+          bottom: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Soal #$nomor  (Bobot: ${bobot.toStringAsFixed(2)}%)',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              AppPill(
+                label: soal.jenis == Soal.esai
+                    ? 'Esai'
+                    : benar
+                        ? '✓ Benar (+${bobot.toStringAsFixed(2)}%)'
+                        : '⚠ Salah',
+                color: soal.jenis == Soal.esai
+                    ? AppColors.blue
+                    : benar
+                        ? AppColors.green
+                        : AppColors.orange,
+                background: soal.jenis == Soal.esai
+                    ? AppColors.blueLight
+                    : benar
+                        ? AppColors.greenLight
+                        : AppColors.orangeLight,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(soal.pertanyaan),
+          if (soal.jenis == Soal.esai) ...[
+            const SizedBox(height: 12),
+            _JawabanEsai(
+              label: 'Jawaban Siswa',
+              value: jawabanEsaiSiswa.isEmpty
+                  ? 'Tidak ada jawaban'
+                  : jawabanEsaiSiswa,
+            ),
+            const SizedBox(height: 8),
+            _JawabanEsai(label: 'Kunci Jawaban', value: soal.jawabanEsai),
+          ] else if (soal.opsi.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...List.generate(soal.opsi.length, (index) {
+              final isKey = index == soal.jawaban;
+              final isSelected = jawabanTersedia && index == pilihanSiswa;
+              final isWrongSelection = isSelected && !isKey;
+              final background = isKey
+                  ? AppColors.greenLight
+                  : isWrongSelection
+                      ? AppColors.redLight
+                      : AppColors.bg;
+              final outline = isKey
+                  ? AppColors.green.withValues(alpha: .35)
+                  : isWrongSelection
+                      ? AppColors.red.withValues(alpha: .35)
+                      : AppColors.border;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: outline),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${String.fromCharCode(65 + index)}.',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(soal.opsi[index])),
+                    if (isKey)
+                      const AppPill(
+                        label: '✓ Kunci Jawaban',
+                        color: AppColors.green,
+                        background: AppColors.greenLight,
+                      )
+                    else if (isWrongSelection)
+                      const AppPill(
+                        label: '✕ Pilihan Siswa (Salah)',
+                        color: AppColors.red,
+                        background: AppColors.redLight,
+                      ),
+                  ],
+                ),
+              );
+            }),
+            if (!jawabanTersedia)
+              const Text(
+                'Siswa tidak memilih jawaban.',
+                style: TextStyle(color: AppColors.muted, fontSize: 11),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _JawabanEsai extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _JawabanEsai({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+          ),
+          const SizedBox(height: 4),
+          Text(value),
+        ],
       ),
     );
   }

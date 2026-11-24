@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../models/kuis.dart';
 import '../../providers/app_provider.dart';
@@ -16,18 +18,23 @@ class SoalFormScreen extends StatefulWidget {
 }
 
 class _SoalFormScreenState extends State<SoalFormScreen> {
-  static const _difficultyLevels = ['mudah', 'sedang', 'sulit'];
   static const _letters = ['A', 'B', 'C', 'D', 'E'];
+  static const _maxImageBytes = 5 * 1024 * 1024;
 
   final _formKey = GlobalKey<FormState>();
+  final _imagePicker = ImagePicker();
   late final TextEditingController _questionController;
   late final TextEditingController _weightController;
   late final List<TextEditingController> _optionControllers;
+  Uint8List? _imageBytes;
+  String? _imageName;
+  String? _imageUrl;
   int _answer = 0;
-  String? _difficulty;
+  String _questionType = Soal.pilihanGanda;
   bool _saving = false;
 
   bool get isEdit => widget.index != null;
+  bool get _isEssay => _questionType == Soal.esai;
 
   @override
   void initState() {
@@ -45,10 +52,12 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
     _weightController = TextEditingController(
       text: existing?.bobot.toString() ?? _defaultWeight(quiz),
     );
+    _imageBytes = existing?.gambar;
+    _imageName = existing?.gambarNamaFile;
+    _imageUrl = existing?.gambarUrl;
     _answer = existing?.jawaban ?? 0;
-    _difficulty = _difficultyLevels.contains(existing?.tingkatKesulitan)
-        ? existing!.tingkatKesulitan
-        : null;
+    _questionType =
+        existing?.jenis == Soal.esai ? Soal.esai : Soal.pilihanGanda;
   }
 
   String _defaultWeight(Kuis? quiz) {
@@ -57,6 +66,44 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
                 .fold<double>(0, (total, question) => total + question.bobot) ??
             0);
     return (remaining > 0 ? remaining : 1).toStringAsFixed(2);
+  }
+
+  Future<void> _pilihGambar() async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final extension = picked.name.toLowerCase().split('.').last;
+      if (!{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+        if (mounted) {
+          showAppToast(context, 'Format gambar harus JPG, PNG, atau WEBP.');
+        }
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+      if (bytes.length > _maxImageBytes) {
+        if (mounted) {
+          showAppToast(context, 'Ukuran gambar maksimal 5 MB.');
+        }
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _imageBytes = bytes;
+        _imageName = picked.name;
+        _imageUrl = null;
+      });
+    } on PlatformException {
+      if (mounted) {
+        showAppToast(context, 'Gagal mengambil gambar soal. Coba lagi.');
+      }
+    }
   }
 
   @override
@@ -69,7 +116,7 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
     super.dispose();
   }
 
-  Future<void> _simpan() async {
+  Future<void> _simpan({bool selesai = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     final quiz = context.read<AppProvider>().kuisById(widget.kuisId);
     if (quiz == null) {
@@ -80,16 +127,25 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
       showAppToast(context, 'Soal pada kuis terbit tidak dapat diubah.');
       return;
     }
+    if (!_isEssay && _optionControllers[_answer].text.trim().isEmpty) {
+      showAppToast(context, 'Pilih opsi yang terisi sebagai jawaban benar.');
+      return;
+    }
 
     final soal = Soal(
       id: isEdit ? quiz.soal[widget.index!].id : null,
       pertanyaan: _questionController.text.trim(),
-      opsi: _optionControllers
-          .map((controller) => controller.text.trim())
-          .toList(),
+      opsi: _isEssay
+          ? const []
+          : _optionControllers
+              .map((controller) => controller.text.trim())
+              .toList(),
       jawaban: _answer,
       bobot: double.parse(_weightController.text),
-      tingkatKesulitan: _difficulty ?? '',
+      tingkatKesulitan: isEdit ? quiz.soal[widget.index!].tingkatKesulitan : '',
+      gambar: _imageBytes,
+      gambarNamaFile: _imageName,
+      jenis: _questionType,
     );
 
     setState(() => _saving = true);
@@ -103,11 +159,45 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
       if (!mounted) return;
       showAppToast(context,
           isEdit ? 'Soal berhasil diperbarui.' : 'Soal berhasil ditambahkan.');
-      Navigator.pop(context);
+      if (isEdit || selesai) {
+        Navigator.pop(context);
+      } else {
+        for (final controller in _optionControllers) {
+          controller.clear();
+        }
+        _questionController.clear();
+        _formKey.currentState?.reset();
+        setState(() {
+          _answer = 0;
+          _imageBytes = null;
+          _imageName = null;
+          _imageUrl = null;
+          _questionType = Soal.pilihanGanda;
+          _weightController.text = _defaultWeight(quiz);
+        });
+      }
     } catch (error) {
       if (mounted) showAppToast(context, 'Gagal menyimpan soal: $error');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _selesai() async {
+    if (isEdit) {
+      Navigator.pop(context);
+      return;
+    }
+
+    final hasContent = _questionController.text.trim().isNotEmpty ||
+        _imageBytes != null ||
+        (!_isEssay &&
+            _optionControllers
+                .any((controller) => controller.text.trim().isNotEmpty));
+    if (hasContent) {
+      await _simpan(selesai: true);
+    } else {
+      Navigator.pop(context);
     }
   }
 
@@ -116,6 +206,33 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
     final quiz = context.watch<AppProvider>().kuisById(widget.kuisId);
     return Scaffold(
       appBar: simpleAppBar(isEdit ? 'Edit Soal' : 'Tambah Soal'),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
+                onPressed: _saving ? null : () => _simpan(),
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        isEdit ? 'Simpan Perubahan' : 'Tambah Soal Berikutnya'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                  onPressed: _saving ? null : _selesai,
+                  child: const Text('Selesai')),
+            ],
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -133,7 +250,7 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _label('Pertanyaan *'),
+                    _label('Pertanyaan / Butir Soal *'),
                     TextFormField(
                       controller: _questionController,
                       maxLines: 3,
@@ -144,39 +261,152 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
                           : null,
                     ),
                     const SizedBox(height: 14),
-                    for (var index = 0;
-                        index < _optionControllers.length;
-                        index++) ...[
-                      _label('Opsi ${_letters[index]}${index < 4 ? ' *' : ''}'),
-                      TextFormField(
-                        controller: _optionControllers[index],
-                        maxLength: 255,
-                        validator: (value) =>
-                            index < 4 && (value ?? '').trim().isEmpty
-                                ? 'Opsi ${_letters[index]} wajib diisi.'
-                                : null,
+                    _label('Gambar Soal (opsional)'),
+                    if (_imageBytes == null && _imageUrl == null)
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _saving ? null : _pilihGambar,
+                          icon: const Icon(Icons.image_outlined),
+                          label: const Text('Pilih gambar soal'),
+                        ),
+                      )
+                    else ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: _imageBytes != null
+                            ? Image.memory(
+                                _imageBytes!,
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.contain,
+                              )
+                            : Image.network(
+                                _imageUrl!,
+                                height: 180,
+                                width: double.infinity,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const SizedBox(
+                                  height: 180,
+                                  child: Center(
+                                    child: Text(
+                                      'Gambar gagal dimuat. Periksa URL dan akses storage publik.',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
                       ),
-                      if (index < _optionControllers.length - 1)
-                        const SizedBox(height: 10),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _saving ? null : _pilihGambar,
+                              icon: const Icon(Icons.swap_horiz_rounded),
+                              label: const Text('Ganti gambar'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_imageBytes != null)
+                            TextButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => setState(() {
+                                        _imageBytes = null;
+                                        _imageName = null;
+                                      }),
+                              child: const Text('Hapus'),
+                            ),
+                        ],
+                      ),
                     ],
-                    const SizedBox(height: 8),
-                    _label('Jawaban Benar *'),
-                    DropdownButtonFormField<int>(
-                      initialValue: _answer,
-                      items: List.generate(
-                        5,
-                        (index) => DropdownMenuItem(
-                          value: index,
-                          child: Text('Opsi ${_letters[index]}'),
+                    const SizedBox(height: 14),
+                    _label('Jenis Soal *'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _typeButton(
+                            label: 'Pilihan Ganda',
+                            type: Soal.pilihanGanda,
+                            enabled: true,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _typeButton(
+                            label: 'Esai',
+                            type: Soal.esai,
+                            enabled: _essayAllowed(quiz),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (!_essayAllowed(quiz)) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Kategori pre-test dan post-test hanya mendukung pilihan ganda.',
+                        style: TextStyle(fontSize: 11, color: AppColors.muted),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    if (!_isEssay)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.bg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Pilihan Jawaban',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Opsi A–D wajib diisi, opsi E opsional. Ketuk huruf opsi untuk memilih jawaban benar.',
+                              style: TextStyle(
+                                  fontSize: 10.5, color: AppColors.muted),
+                            ),
+                            const SizedBox(height: 12),
+                            for (var index = 0;
+                                index < _optionControllers.length;
+                                index++) ...[
+                              _opsiField(index),
+                              if (index < _optionControllers.length - 1)
+                                const SizedBox(height: 10),
+                            ],
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: AppColors.green,
+                                  size: 17,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Kunci Jawaban: Opsi ${_letters[_answer]}',
+                                  style: const TextStyle(
+                                    color: AppColors.green,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      onChanged: (value) =>
-                          setState(() => _answer = value ?? 0),
-                      validator: (value) => value == 4 &&
-                              _optionControllers[4].text.trim().isEmpty
-                          ? 'Isi opsi E atau pilih jawaban A–D.'
-                          : null,
-                    ),
+                    if (_isEssay)
+                      const Text(
+                        'Jawaban siswa untuk soal esai akan dinilai oleh guru.',
+                        style: TextStyle(fontSize: 11, color: AppColors.muted),
+                      ),
                     const SizedBox(height: 14),
                     _label('Bobot (%) *'),
                     TextFormField(
@@ -193,50 +423,14 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 14),
-                    _label('Tingkat Kesulitan'),
-                    DropdownButtonFormField<String?>(
-                      initialValue: _difficulty,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('-- Sesuai Kuis / Bebas --'),
-                        ),
-                        ..._difficultyLevels.map(
-                          (level) => DropdownMenuItem<String?>(
-                            value: level,
-                            child: Text(level),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) =>
-                          setState(() => _difficulty = value),
-                    ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Opsi A–D wajib diisi, opsi E opsional. Total bobot soal harus tepat 100 agar kuis dapat dipublikasikan.',
+                      'Total bobot semua soal harus tepat 100 agar kuis dapat dipublikasikan.',
                       style: TextStyle(fontSize: 11, color: AppColors.muted),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style:
-                    ElevatedButton.styleFrom(backgroundColor: AppColors.purple),
-                onPressed: _saving ? null : _simpan,
-                child: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(isEdit ? 'Simpan Perubahan' : 'Simpan Soal'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal')),
             ],
           ),
         ),
@@ -250,4 +444,76 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
             style:
                 const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
       );
+
+  Widget _opsiField(int index) {
+    final isCorrect = _answer == index;
+    final letter = _letters[index];
+    return Row(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => setState(() => _answer = index),
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isCorrect ? AppColors.green : AppColors.purple,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              letter,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextFormField(
+            controller: _optionControllers[index],
+            maxLength: 255,
+            onTap: () => setState(() => _answer = index),
+            decoration: InputDecoration(
+              hintText:
+                  'Opsi pilihan $letter${index < 4 ? ' *' : ' (opsional)'}',
+              filled: true,
+              fillColor: isCorrect ? AppColors.greenLight : Colors.white,
+            ),
+            validator: (value) => index < 4 && (value ?? '').trim().isEmpty
+                ? 'Opsi $letter wajib diisi.'
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _essayAllowed(Kuis? quiz) =>
+      quiz?.kategori != 'pre-test' && quiz?.kategori != 'post-test';
+
+  Widget _typeButton({
+    required String label,
+    required String type,
+    required bool enabled,
+  }) {
+    final selected = _questionType == type;
+    return OutlinedButton.icon(
+      onPressed: enabled ? () => setState(() => _questionType = type) : null,
+      icon: Icon(
+        type == Soal.pilihanGanda
+            ? Icons.checklist_rounded
+            : Icons.short_text_rounded,
+        size: 18,
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: selected ? Colors.white : AppColors.blue,
+        backgroundColor: selected ? AppColors.blue : Colors.white,
+        side: BorderSide(
+          color: selected ? AppColors.blue : AppColors.border,
+        ),
+      ),
+      label: Text(label),
+    );
+  }
 }

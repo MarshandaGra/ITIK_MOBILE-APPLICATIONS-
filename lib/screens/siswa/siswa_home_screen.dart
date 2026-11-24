@@ -57,7 +57,8 @@ class _SiswaHomeScreenState extends State<SiswaHomeScreen> {
     }
 
     final totalMateri = app.materiList.length;
-    final totalKuis = app.kuisList.length;
+    final kuisTerbit = app.kuisList.where((k) => k.isPublished).toList();
+    final totalKuis = kuisTerbit.length;
     final doneCount = app.progress.values.where((v) => v == true).length;
     // Antisipasi: pembagian dengan nol & progres > 100%
     final pct = totalMateri == 0
@@ -71,7 +72,7 @@ class _SiswaHomeScreenState extends State<SiswaHomeScreen> {
 
     // Kuis yang belum pernah dikerjakan siswa ini
     final riwayat = app.riwayatSiswaSaatIni;
-    final kuisBelum = app.kuisList
+    final kuisBelum = kuisTerbit
         .where((k) => !riwayat.any((h) => h.kuisId == k.id))
         .toList();
 

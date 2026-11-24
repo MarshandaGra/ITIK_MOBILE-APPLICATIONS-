@@ -39,8 +39,19 @@ Berikut adalah pembagian peran dalam pengembangan sistem ITIK:
    `cd ITIK_MOBILE-APPLICATIONS-`
 3. Unduh semua *package* / *dependencies*:
    `flutter pub get`
-4. Jalankan aplikasi di emulator atau HP yang terhubung:
-   `flutter run`
+4. Jalankan aplikasi dengan alamat API yang dapat dijangkau perangkat:
+   * Android emulator: `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api`
+   * HP Android: `flutter run --dart-define=API_BASE_URL=http://<IP-LAN-KOMPUTER>:8000/api`
+
+   Ganti `<IP-LAN-KOMPUTER>` dengan alamat IPv4 komputer Laragon dan pastikan HP
+   berada di jaringan yang dapat mengakses komputer tersebut. `127.0.0.1` hanya
+   menunjuk ke perangkat yang menjalankan aplikasi, sehingga hanya cocok untuk
+   web yang berjalan di komputer itu sendiri. Jika `API_BASE_URL` tidak diberikan,
+   aplikasi memakai `127.0.0.1` untuk web dan `10.0.2.2` untuk Android emulator.
+   URL gambar, foto profil, dan file PDF akan memakai host yang sama secara
+   otomatis. Jika storage menggunakan domain berbeda, tambahkan
+   `--dart-define=ASSET_BASE_URL=http://<host-asset>` pada perintah menjalankan
+   aplikasi.
 
 ### 🔄 SOP Harian GitHub (Penggunaan Branch)
 1. Ambil Kode Terbaru Dulu:

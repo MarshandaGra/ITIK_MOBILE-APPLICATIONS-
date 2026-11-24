@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/user.dart';
 import '../../providers/app_provider.dart';
+import '../../models/user.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -19,9 +17,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   final currentPasswordCtrl = TextEditingController();
   final newPasswordCtrl = TextEditingController();
   final confirmPasswordCtrl = TextEditingController();
-  final _picker = ImagePicker();
   bool _saving = false;
-  bool _photoLoading = false;
 
   @override
   void dispose() {
@@ -156,7 +152,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final currentPassword = currentPasswordCtrl.text;
     final newPassword = newPasswordCtrl.text;
     final confirmation = confirmPasswordCtrl.text;
-    if (currentPassword.isEmpty && newPassword.isEmpty && confirmation.isEmpty) {
+    if (currentPassword.isEmpty &&
+        newPassword.isEmpty &&
+        confirmation.isEmpty) {
       showAppToast(context, 'Isi kolom password jika ingin mengubahnya.');
       return;
     }
@@ -184,7 +182,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AppProvider>().currentUser!;
     final color = RoleColors.of(user.role.value);
-    final adaFoto = user.foto != null || user.fotoUrl != null;
     final ImageProvider<Object>? fotoProvider = user.foto != null
         ? MemoryImage(user.foto!) as ImageProvider<Object>
         : user.fotoUrl != null
@@ -251,11 +248,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       ),
                     ),
                   ),
-            //       const SizedBox(height: 8),
-            //       TextButton(
-            //         onPressed: () => _tampilkanPilihanFoto(adaFoto),
-            //         child: const Text('Ganti Foto Profil'),
-            //       ),
+                  //       const SizedBox(height: 8),
+                  //       TextButton(
+                  //         onPressed: () => _tampilkanPilihanFoto(adaFoto),
+                  //         child: const Text('Ganti Foto Profil'),
+                  //       ),
                 ],
               ),
             ),

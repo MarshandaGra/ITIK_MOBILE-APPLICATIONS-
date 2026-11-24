@@ -33,13 +33,28 @@ class _GuruShellState extends State<GuruShell> {
         selectedIndex: index,
         onDestinationSelected: (i) => setState(() => index = i),
         backgroundColor: AppColors.card,
-        indicatorColor: AppColors.greenLight,
+        indicatorColor: AppColors.blueLight,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Beranda'),
-          NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Materi'),
-          NavigationDestination(icon: Icon(Icons.quiz_outlined), selectedIcon: Icon(Icons.quiz), label: 'Kuis'),
-          NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'Nilai'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
+          NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Beranda'),
+          NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book),
+              label: 'Materi'),
+          NavigationDestination(
+              icon: Icon(Icons.quiz_outlined),
+              selectedIcon: Icon(Icons.quiz),
+              label: 'Kuis'),
+          NavigationDestination(
+              icon: Icon(Icons.trending_up_outlined),
+              selectedIcon: Icon(Icons.trending_up),
+              label: 'Remedial'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profil'),
         ],
       ),
     );

@@ -85,10 +85,11 @@ class _HasilCard extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => KuisResultScreen(
           kuis: kuis,
-          nilai: hasil.nilai,
+          nilai: hasil.nilaiMenunggu ? null : hasil.nilai,
           benar: hasil.benar,
           salah: salah,
           jawabanSiswa: hasil.jawabanSiswa,
+          attemptId: hasil.id,
           serverGraded: true,
           resultStatusLabel: hasil.statusLabel,
         ),
@@ -162,16 +163,18 @@ class _HasilCard extends StatelessWidget {
                           color: AppColors.blueLight,
                           borderRadius: BorderRadius.circular(99),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.visibility_outlined,
-                              size: 13, color: AppColors.blue),
-                          const SizedBox(width: 4),
-                          const Text('Detail',
-                              style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.blue)),
-                        ]),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.visibility_outlined,
+                                  size: 13, color: AppColors.blue),
+                              SizedBox(width: 4),
+                              Text('Detail',
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.blue)),
+                            ]),
                       ),
                     ),
                     AppPill(
@@ -222,8 +225,8 @@ class _HasilCard extends StatelessWidget {
                             h.idKuisRemedial != null
                         ? () async {
                             try {
-                              final remedialKuis = await app
-                                  .mulaiKuisSiswa(h.idKuisRemedial!);
+                              final remedialKuis =
+                                  await app.mulaiKuisSiswa(h.idKuisRemedial!);
                               if (!context.mounted) return;
                               await Navigator.push(
                                 context,

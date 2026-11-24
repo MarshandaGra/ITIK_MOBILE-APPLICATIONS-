@@ -268,17 +268,62 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
         .toList();
 
     return Scaffold(
-      appBar: simpleAppBar(isEdit ? 'Edit Kuis' : 'Tambah Kuis Baru'),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
             children: [
+              const Text(
+                'PORTAL GURU',
+                style: TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Kembali'),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                isEdit ? 'Edit Kuis' : 'Tambah Kuis',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isEdit
+                    ? 'Perbarui informasi kuis, alokasi waktu, kriteria kelulusan, dan jadwal pelaksanaan.'
+                    : 'Lengkapi informasi kuis, alokasi waktu, kriteria kelulusan, dan jadwal pelaksanaan.',
+                style: const TextStyle(fontSize: 14, color: AppColors.muted),
+              ),
+              const SizedBox(height: 18),
               AppCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      isEdit ? 'Formulir Edit Kuis' : 'Formulir Kuis',
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tanda bintang (*) menandakan kolom wajib diisi.',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 16),
                     _label('Judul Kuis *'),
                     TextFormField(
                       controller: _judulController,

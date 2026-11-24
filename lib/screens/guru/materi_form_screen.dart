@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,6 +30,7 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
   String? _mapelError;
   bool _loadingMapel = true;
   PlatformFile? _selectedPdf;
+  Uint8List? _selectedPdfBytes;
   bool _saving = false;
 
   bool get isEdit => widget.materiId != null;
@@ -36,11 +39,10 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
   void initState() {
     super.initState();
     final app = context.read<AppProvider>();
-    final existing =
-        widget.materiId != null ? app.materiById(widget.materiId!) : null;
+    final existing = isEdit ? app.materiById(widget.materiId!) : null;
     babCtrl = TextEditingController(text: existing?.bab ?? '');
     judulCtrl = TextEditingController(text: existing?.judul ?? '');
-    kelasCtrl = TextEditingController(text: existing?.kelas ?? '');
+    kelasCtrl = TextEditingController(text: existing?.kelas ?? 'X TKJ 1');
     deskripsiCtrl = TextEditingController(text: existing?.deskripsi ?? '');
     youtubeCtrl = TextEditingController(text: existing?.linkYoutube ?? '');
     _idMapel = existing?.idMapel;
@@ -94,18 +96,17 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
         showAppToast(context, 'File materi harus berformat PDF.');
         return;
       }
-      final fileSize = await file.length();
+      final bytes = await file.readAsBytes();
       if (!mounted) return;
-      if (fileSize == null) {
-        showAppToast(context, 'Ukuran file PDF tidak dapat dibaca.');
-        return;
-      }
-      if (fileSize > 10 * 1024 * 1024) {
+      if (bytes.length > 10 * 1024 * 1024) {
         showAppToast(context, 'Ukuran file PDF maksimal 10 MB.');
         return;
       }
 
-      setState(() => _selectedPdf = file);
+      setState(() {
+        _selectedPdf = file;
+        _selectedPdfBytes = bytes;
+      });
     } catch (error) {
       if (mounted) showAppToast(context, 'Gagal memilih PDF: $error');
     }
@@ -144,18 +145,17 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
         oleh: existing?.oleh ?? '',
         tanggal: existing?.tanggal ?? '',
       );
-      final pdfBytes = await _selectedPdf?.readAsBytes();
       if (isEdit) {
         await app.editMateri(
           widget.materiId!,
           materi,
-          pdfBytes: pdfBytes,
+          pdfBytes: _selectedPdfBytes,
           pdfName: _selectedPdf?.name,
         );
       } else {
         await app.tambahMateri(
           materi,
-          pdfBytes: pdfBytes,
+          pdfBytes: _selectedPdfBytes,
           pdfName: _selectedPdf?.name,
         );
       }
@@ -174,8 +174,11 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final materi = isEdit
+        ? context.watch<AppProvider>().materiById(widget.materiId!)
+        : null;
+
     return Scaffold(
-      appBar: simpleAppBar(isEdit ? 'Edit Materi' : 'Tambah Materi Baru'),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -319,30 +322,15 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
                         style: TextStyle(fontSize: 12, color: AppColors.muted),
                       ),
                       if (_selectedPdf == null &&
-                          isEdit &&
-                          (context
-                                  .watch<AppProvider>()
-                                  .materiById(widget.materiId!)
-                                  ?.pdfName
-                                  .isNotEmpty ??
-                              false))
+                          (materi?.pdfName.isNotEmpty ?? false))
                         Text(
-                          'PDF saat ini: ${context.watch<AppProvider>().materiById(widget.materiId!)!.pdfName}',
+                          'PDF saat ini: ${materi!.pdfName}',
                           style: const TextStyle(
                               fontSize: 12, color: AppColors.muted),
                         ),
-                      if (_selectedPdf == null &&
-                          isEdit &&
-                          context
-                                  .watch<AppProvider>()
-                                  .materiById(widget.materiId!)
-                                  ?.pdfUrl !=
-                              null)
+                      if (_selectedPdf == null && materi?.pdfUrl != null)
                         SelectableText(
-                          context
-                              .watch<AppProvider>()
-                              .materiById(widget.materiId!)!
-                              .pdfUrl!,
+                          materi!.pdfUrl!,
                           style: const TextStyle(
                               fontSize: 11, color: AppColors.muted),
                         ),
@@ -350,7 +338,10 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
                         TextButton(
                           onPressed: _saving
                               ? null
-                              : () => setState(() => _selectedPdf = null),
+                              : () => setState(() {
+                                    _selectedPdf = null;
+                                    _selectedPdfBytes = null;
+                                  }),
                           child: const Text('Hapus pilihan'),
                         ),
                       const SizedBox(height: 14),

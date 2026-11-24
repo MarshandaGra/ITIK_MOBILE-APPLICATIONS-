@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class Materi {
   final String id;
   String bab;
@@ -7,6 +9,8 @@ class Materi {
   String isi;
   String? idMapel;
   String? linkYoutube;
+  String? mataPelajaran;
+  Uint8List? gambar;
   String pdfName;
   String? pdfUrl; // path/url file PDF
   String ukuran;
@@ -22,6 +26,8 @@ class Materi {
     required this.isi,
     this.idMapel,
     this.linkYoutube,
+    this.mataPelajaran,
+    this.gambar,
     required this.pdfName,
     this.pdfUrl,
     required this.ukuran,

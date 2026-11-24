@@ -14,24 +14,57 @@ class MateriKelolaScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final list = app.materiList;
+    final subject =
+        app.currentUser?.mataPelajaran ?? 'Teknologi Informasi dan Komunikasi';
 
     return Scaffold(
-      appBar: simpleAppBar('Kelola Materi'),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
             const Text(
-                'Berikut materi yang tersimpan dan tersedia untuk siswa.',
-                style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
-            const SizedBox(height: 10),
-            SectionTitle('Materi Sebelumnya (${list.length})'),
+              'PORTAL GURU',
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              subject,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${list.length} materi pembelajaran tersedia untuk mata pelajaran ini.',
+              style: const TextStyle(color: AppColors.muted, fontSize: 14),
+            ),
+            const SizedBox(height: 18),
+            SectionTitle('Materi Pembelajaran (${list.length})'),
             if (list.isEmpty)
               const EmptyState(
                   text:
                       'Belum ada materi yang diunggah.\nTekan tombol di bawah untuk menambahkan.')
             else
-              ...list.map((m) => _MateriManageCard(materi: m, app: app)),
+              ...list.indexed.map(
+                (entry) => _MateriManageCard(
+                  materi: entry.$2,
+                  app: app,
+                  index: entry.$1 + 1,
+                ),
+              ),
+            const SizedBox(height: 12),
+            const Text(
+              'ITIK · Portal Guru — Media Pembelajaran TIK',
+              style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+            ),
           ],
         ),
       ),
@@ -49,7 +82,12 @@ class MateriKelolaScreen extends StatelessWidget {
 class _MateriManageCard extends StatelessWidget {
   final Materi materi;
   final AppProvider app;
-  const _MateriManageCard({required this.materi, required this.app});
+  final int index;
+  const _MateriManageCard({
+    required this.materi,
+    required this.app,
+    required this.index,
+  });
 
   Future<void> _hapus(BuildContext context) async {
     final ok = await confirmDialog(context,
@@ -77,13 +115,21 @@ class _MateriManageCard extends StatelessWidget {
           children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                    color: AppColors.redLight,
-                    borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.menu_book_rounded,
-                    color: AppColors.purple, size: 19),
+                  color: AppColors.text,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  index.toString().padLeft(2, '0'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -98,19 +144,17 @@ class _MateriManageCard extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted)),
                       const SizedBox(height: 6),
-                      Wrap(spacing: 6, runSpacing: 4, children: [
-                        if (m.pdfName.isNotEmpty)
-                          Text('📄 ${m.pdfName}',
-                              style: const TextStyle(
-                                  fontSize: 10.5, color: AppColors.muted)),
-                        if (m.ukuran.isNotEmpty)
-                          Text(m.ukuran,
-                              style: const TextStyle(
-                                  fontSize: 10.5, color: AppColors.muted)),
-                        Text('oleh ${m.oleh}',
-                            style: const TextStyle(
-                                fontSize: 10.5, color: AppColors.muted)),
-                      ]),
+                      Text(
+                        [
+                          if (m.bab.isNotEmpty) m.bab,
+                          if (m.kelas.isNotEmpty) 'Kelas ${m.kelas}',
+                          if (m.pdfName.isNotEmpty) 'PDF: ${m.pdfName}',
+                        ].join(' • '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 10.5, color: AppColors.muted),
+                      ),
                     ]),
               ),
             ]),

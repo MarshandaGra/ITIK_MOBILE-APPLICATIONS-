@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,7 +18,7 @@ class AppProvider extends ChangeNotifier {
   final List<HasilKuis> hasilList = <HasilKuis>[];
 
   final Map<String, bool> progress = {};
-  final ApiClient api = ApiClient();
+  final ApiClient api;
 
   AppUser? currentUser;
   bool _sessionInitialized = false;
@@ -34,7 +33,7 @@ class AppProvider extends ChangeNotifier {
   bool get isLoggedIn => currentUser != null;
   bool get sessionInitialized => _sessionInitialized;
 
-  AppProvider() {
+  AppProvider({ApiClient? apiClient}) : api = apiClient ?? ApiClient() {
     unawaited(restoreSession());
   }
 
@@ -140,12 +139,54 @@ class AppProvider extends ChangeNotifier {
       fotoUrl: _photoUrlFromApi(json['foto_url']));
 
   String? _photoUrlFromApi(dynamic value) {
+    return _publicUrlFromApi(value);
+  }
+
+  String? _questionImageUrlFromApi(dynamic value) {
     final path = value?.toString();
     if (path == null || path.isEmpty) return null;
     final uri = Uri.tryParse(path);
     if (uri == null) return null;
-    if (uri.hasScheme) return uri.toString();
-    return Uri.parse(ApiClient.baseUrl).resolveUri(uri).toString();
+    final base = Uri.parse(ApiClient.assetBaseUrl);
+    if (uri.hasScheme) {
+      return base
+          .replace(
+            path: uri.path,
+            query: uri.query,
+            fragment: uri.fragment,
+          )
+          .toString();
+    }
+
+    final normalizedPath = path.replaceFirst(RegExp(r'^/'), '');
+    final imagePath = normalizedPath.startsWith('storage/')
+        ? '/$normalizedPath'
+        : '/storage/$normalizedPath';
+    return base.replace(path: imagePath).toString();
+  }
+
+  String? _publicUrlFromApi(dynamic value) {
+    final path = value?.toString();
+    if (path == null || path.isEmpty) return null;
+
+    final uri = Uri.tryParse(path);
+    if (uri == null) return null;
+    final base = Uri.parse(ApiClient.assetBaseUrl);
+
+    if (uri.hasScheme) {
+      if (!{'localhost', '127.0.0.1', '::1', '[::1]'}.contains(uri.host)) {
+        return uri.toString();
+      }
+      return base
+          .replace(path: uri.path, query: uri.query, fragment: uri.fragment)
+          .toString();
+    }
+
+    return base
+        .resolveUri(
+          uri.path.startsWith('/') ? uri : Uri.parse('/${uri.path}'),
+        )
+        .toString();
   }
 
   bool _isMobileRole(Map<String, dynamic> json) =>
@@ -269,7 +310,7 @@ class AppProvider extends ChangeNotifier {
       idMapel: j['id_mapel']?.toString(),
       linkYoutube: j['link_youtube']?.toString(),
       pdfName: '${j['isi_materi'] ?? ''}'.split('/').last,
-      pdfUrl: (j['pdf_url'] ?? j['file_url'])?.toString(),
+      pdfUrl: _publicUrlFromApi(j['pdf_url'] ?? j['file_url']),
       ukuran: '',
       oleh: '${j['user'] is Map ? j['user']['nama_lengkap'] ?? '' : ''}',
       tanggal: '${j['created_at'] ?? ''}',
@@ -356,6 +397,12 @@ class AppProvider extends ChangeNotifier {
   Soal _soalFromApi(Map<String, dynamic> json) {
     const letters = ['A', 'B', 'C', 'D', 'E'];
     final answer = letters.indexOf('${json['jawaban'] ?? 'A'}');
+    final apiType =
+        '${json['tipe'] ?? json['tipe_soal'] ?? 'pilihan_ganda'}'.toLowerCase();
+    final imageUrl = json['gambar_url']?.toString();
+    final imageValue = imageUrl != null && imageUrl.trim().isNotEmpty
+        ? imageUrl
+        : json['gambar_path'];
     final options = [
       json['opsi_a'],
       json['opsi_b'],
@@ -374,6 +421,11 @@ class AppProvider extends ChangeNotifier {
       jawaban: answer < 0 ? 0 : answer,
       bobot: _numberFromApi(json['bobot'])?.toDouble() ?? 0,
       tingkatKesulitan: '${json['tingkat_kesulitan'] ?? 'mudah'}',
+      jenis: apiType == 'essay' || apiType == 'esai'
+          ? Soal.esai
+          : Soal.pilihanGanda,
+      gambarUrl: _questionImageUrlFromApi(imageValue),
+      jawabanEsai: '${json['jawaban_esai'] ?? json['kunci_jawaban'] ?? ''}',
     );
   }
 
@@ -454,7 +506,7 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  Future<double> kumpulkanKuisSiswa(String kuisId) async {
+  Future<HasilPengumpulanKuis> kumpulkanKuisSiswa(String kuisId) async {
     final response = await api.request(
       '/siswa/kuis/${Uri.encodeComponent(kuisId)}/submit',
       method: 'POST',
@@ -463,13 +515,76 @@ class AppProvider extends ChangeNotifier {
     if (data is! Map<String, dynamic>) {
       throw const FormatException('Respons API hasil kuis tidak valid.');
     }
-    final score = _numberFromApi(data['nilai']);
-    if (score == null) {
+    if (!data.containsKey('nilai')) {
       throw const FormatException(
           'Nilai kuis tidak ditemukan pada respons API.');
     }
+    final score = _numberFromApi(data['nilai']);
+    final attemptId = data['id_mengerjakan']?.toString();
+    if (attemptId == null || attemptId.isEmpty) {
+      throw const FormatException(
+          'ID pengerjaan tidak ditemukan pada respons API.');
+    }
     unawaited(loadNilaiSiswa());
-    return score.toDouble();
+    return HasilPengumpulanKuis(
+      idMengerjakan: attemptId,
+      nilai: score?.toDouble(),
+    );
+  }
+
+  Future<EvaluasiKuis> loadEvaluasiSoal(String attemptId) async {
+    final response = await api.request(
+      '/siswa/nilai/${Uri.encodeComponent(attemptId)}/evaluasi',
+    );
+    final data = response['data'];
+    if (data is! Map<String, dynamic> || data['tampil_evaluasi'] is! bool) {
+      throw const FormatException('Respons API evaluasi kuis tidak valid.');
+    }
+
+    final tampilEvaluasi = data['tampil_evaluasi'] as bool;
+    if (!tampilEvaluasi) {
+      return const EvaluasiKuis(tampilEvaluasi: false, soal: []);
+    }
+
+    final rows = data['soal'];
+    if (rows is! List) {
+      throw const FormatException('Daftar soal evaluasi tidak valid.');
+    }
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+    int? answerIndex(dynamic value) {
+      final index = letters.indexOf('${value ?? ''}'.toUpperCase());
+      return index < 0 ? null : index;
+    }
+
+    return EvaluasiKuis(
+      tampilEvaluasi: true,
+      soal: rows.whereType<Map>().map((row) {
+        final json = Map<String, dynamic>.from(row);
+        final options = [
+          json['opsi_a'],
+          json['opsi_b'],
+          json['opsi_c'],
+          json['opsi_d'],
+          json['opsi_e'],
+        ].map((value) => value?.toString() ?? '').toList();
+        while (options.isNotEmpty && options.last.isEmpty) {
+          options.removeLast();
+        }
+
+        return EvaluasiSoal(
+          pertanyaan: '${json['pertanyaan'] ?? ''}',
+          opsi: options,
+          jawabanBenar: answerIndex(json['jawaban_benar']),
+          jawabanDipilih: answerIndex(json['jawaban_dipilih']),
+          jenis: '${json['tipe_soal'] ?? 'pilihan_ganda'}',
+          jawabanTeks: '${json['jawaban_teks'] ?? ''}',
+          bobot: _numberFromApi(json['bobot'])?.toDouble() ?? 0,
+          nilaiEsai: _numberFromApi(json['nilai_essay'])?.toDouble(),
+          catatanGuru: json['catatan_guru']?.toString(),
+          gambarUrl: _questionImageUrlFromApi(json['gambar_url']),
+        );
+      }).toList(),
+    );
   }
 
   Future<void> loadNilaiSiswa() async {
@@ -623,6 +738,7 @@ class AppProvider extends ChangeNotifier {
       kuis: '${kuisJson['judul'] ?? kuis?.judul ?? 'Kuis'}',
       level: kuis?.level ?? 'Sedang',
       nilai: _numberFromApi(json['nilai'])?.toDouble() ?? 0,
+      nilaiMenunggu: json['nilai'] == null,
       kkm: kkm,
       durasi: _numberFromApi(json['durasi_detik'])?.toInt(),
       benar: 0,
@@ -684,6 +800,7 @@ class AppProvider extends ChangeNotifier {
     required UserRole role,
     String? kelas,
     String? induk,
+    String? mataPelajaran,
   }) {
     if (nama.trim().isEmpty || induk == null || induk.trim().isEmpty) {
       return role == UserRole.siswa
@@ -714,6 +831,10 @@ class AppProvider extends ChangeNotifier {
     if (role == UserRole.siswa && (kelas == null || kelas.trim().isEmpty)) {
       return 'Kelas wajib diisi';
     }
+    if (role == UserRole.guru &&
+        !MataPelajaranGuru.pilihan.contains(mataPelajaran)) {
+      return 'Mata pelajaran guru wajib dipilih';
+    }
 
     final u = AppUser(
       id: 'U${DateTime.now().millisecondsSinceEpoch}',
@@ -723,6 +844,7 @@ class AppProvider extends ChangeNotifier {
       role: role,
       kelas: role == UserRole.siswa ? kelas : null,
       induk: identifier,
+      mataPelajaran: role == UserRole.guru ? mataPelajaran : null,
     );
 
     users.add(u);
@@ -837,6 +959,37 @@ class AppProvider extends ChangeNotifier {
   List<HasilKuis> get riwayatSiswaSaatIni =>
       hasilList.where(milikSiswaIni).toList();
 
+  String _normalisasiMataPelajaran(String? mataPelajaran) {
+    final value = (mataPelajaran ?? '').trim().toLowerCase();
+    if (value.contains('tik') || value.contains('teknologi informasi')) {
+      return 'tik';
+    }
+    if (value.contains('bahasa indonesia')) return 'bahasa indonesia';
+    return value;
+  }
+
+  bool _sesuaiMataPelajaranGuru(String? mataPelajaran) {
+    final guru = currentUser;
+    return guru?.role == UserRole.guru &&
+        _normalisasiMataPelajaran(mataPelajaran) ==
+            _normalisasiMataPelajaran(
+                guru!.mataPelajaran ?? MataPelajaranGuru.tik);
+  }
+
+  List<Materi> get materiGuruSaatIni => materiList
+      .where((materi) => _sesuaiMataPelajaranGuru(materi.mataPelajaran))
+      .toList();
+
+  List<Kuis> get kuisGuruSaatIni {
+    final materiIds = materiGuruSaatIni.map((materi) => materi.id).toSet();
+    return kuisList.where((kuis) => materiIds.contains(kuis.materiId)).toList();
+  }
+
+  List<HasilKuis> get hasilGuruSaatIni {
+    final kuisIds = kuisGuruSaatIni.map((kuis) => kuis.id).toSet();
+    return hasilList.where((hasil) => kuisIds.contains(hasil.kuisId)).toList();
+  }
+
   HasilKuis? get remedialAktifUntukSiswa {
     try {
       return hasilList.firstWhere((h) =>
@@ -846,16 +999,13 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  List<HasilKuis> get menungguValidasi => hasilList
-      .where((h) => h.status == StatusValidasi.menungguValidasi)
-      .toList();
-
   HasilKuis submitHasilKuis({
     required Kuis kuis,
     required int nilai,
     required int benar,
     required int durasiDetik,
     required List<int> jawabanSiswa,
+    List<String> jawabanEsaiSiswa = const [],
     String? remedialOfId,
   }) {
     final h = HasilKuis(
@@ -870,6 +1020,7 @@ class AppProvider extends ChangeNotifier {
       durasi: durasiDetik,
       benar: benar,
       jawabanSiswa: jawabanSiswa,
+      jawabanEsaiSiswa: jawabanEsaiSiswa,
       remedial: remedialOfId != null,
       tanggal: 'Hari ini',
     );
@@ -992,16 +1143,42 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<Kuis> tambahKuis(Kuis kuis) async {
+    final isRemedial = kuis.kategori == 'remedial';
     final response = await api.request(
-      '/guru/kuis',
+      isRemedial ? '/guru/remedial' : '/guru/kuis',
       method: 'POST',
-      body: _kuisPayload(kuis),
+      body: isRemedial
+          ? {
+              'judul': kuis.judul,
+              'deskripsi': kuis.deskripsi.isEmpty ? null : kuis.deskripsi,
+              'id_kuis_asal': kuis.idKuisAsal,
+              'alokasi_waktu': kuis.waktu,
+              'kkm': kuis.kkm,
+            }
+          : _kuisPayload(kuis),
     );
-    final data = response['data'];
-    if (data is! Map<String, dynamic>) {
+    final responseData = response['data'];
+    if (responseData is! Map<String, dynamic>) {
       throw const FormatException('Respons API tambah kuis tidak valid.');
     }
-    final saved = _kuisFromApi(data);
+
+    Map<String, dynamic> quizData = responseData;
+    if (isRemedial) {
+      final remedialQuiz = responseData['kuis_remedial'];
+      if (remedialQuiz is! Map) {
+        throw const FormatException(
+            'Respons API tambah kuis remedial tidak valid.');
+      }
+      quizData = Map<String, dynamic>.from(remedialQuiz);
+      final originQuiz = responseData['kuis_asal'];
+      final originId = responseData['id_kuis_asal'] ??
+          (originQuiz is Map ? originQuiz['id_kuis'] : null);
+      if (originId != null) {
+        quizData['remedial'] = {'id_kuis_asal': originId};
+      }
+    }
+
+    final saved = _kuisFromApi(quizData);
     kuisList.add(saved);
     _sortKuisByNewest();
     notifyListeners();
@@ -1037,10 +1214,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> tambahSoal(String kuisId, Soal soal) async {
-    final response = await api.request(
+    final response = await _requestSoal(
       '/guru/kuis/${Uri.encodeComponent(kuisId)}/soal',
       method: 'POST',
-      body: _soalPayload(soal),
+      soal: soal,
     );
     final data = response['data'];
     if (data is! Map<String, dynamic>) {
@@ -1060,10 +1237,10 @@ class AppProvider extends ChangeNotifier {
       if (id == null) {
         throw StateError('ID soal tidak tersedia. Muat ulang detail kuis.');
       }
-      final response = await api.request(
+      final response = await _requestSoal(
         '/guru/kuis/${Uri.encodeComponent(kuisId)}/soal/${Uri.encodeComponent(id)}',
         method: 'PUT',
-        body: _soalPayload(soal),
+        soal: soal,
       );
       final data = response['data'];
       if (data is! Map<String, dynamic>) {
@@ -1129,12 +1306,42 @@ class AppProvider extends ChangeNotifier {
             : null,
       };
 
+  Future<Map<String, dynamic>> _requestSoal(
+    String path, {
+    required String method,
+    required Soal soal,
+  }) {
+    final payload = _soalPayload(soal);
+    final image = soal.gambar;
+    if (image == null) {
+      return api.request(path, method: method, body: payload);
+    }
+
+    final fileName = soal.gambarNamaFile;
+    if (fileName == null || fileName.isEmpty) {
+      throw ArgumentError('Nama file gambar soal wajib disertakan.');
+    }
+    final fields = <String, String>{
+      for (final entry in payload.entries)
+        if (entry.value != null) entry.key: entry.value.toString(),
+    };
+    return api.multipartRequest(
+      path,
+      fields: fields,
+      fileBytes: image,
+      fileName: fileName,
+      fileField: 'gambar',
+      update: method == 'PUT',
+    );
+  }
+
   Map<String, dynamic> _soalPayload(Soal soal) {
     const letters = ['A', 'B', 'C', 'D', 'E'];
-    String? optionAt(int index) =>
-        index < soal.opsi.length && soal.opsi[index].trim().isNotEmpty
-            ? soal.opsi[index].trim()
-            : null;
+    String? optionAt(int index) => soal.jenis != Soal.esai &&
+            index < soal.opsi.length &&
+            soal.opsi[index].trim().isNotEmpty
+        ? soal.opsi[index].trim()
+        : null;
 
     return {
       'pertanyaan': soal.pertanyaan.trim(),
@@ -1143,7 +1350,7 @@ class AppProvider extends ChangeNotifier {
       'opsi_c': optionAt(2),
       'opsi_d': optionAt(3),
       'opsi_e': optionAt(4),
-      'jawaban': letters[soal.jawaban],
+      'jawaban': soal.jenis == Soal.esai ? null : letters[soal.jawaban],
       'bobot': soal.bobot,
       'tingkat_kesulitan':
           soal.tingkatKesulitan.isEmpty ? null : soal.tingkatKesulitan,

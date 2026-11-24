@@ -141,9 +141,9 @@ class GuruHomeScreen extends StatelessWidget {
                                   fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
-                              'Guru Pengampu TIK',
-                              style: TextStyle(
+                            Text(
+                              'Guru Pengampu ${user.mataPelajaran ?? MataPelajaranGuru.tik}',
+                              style: const TextStyle(
                                   color: Colors.white70, fontSize: 12.5),
                             ),
                             const SizedBox(height: 18),
@@ -225,7 +225,7 @@ class GuruHomeScreen extends StatelessWidget {
   }
 }
 
-/// Kartu putih statistik (Siswa / Kuis / Perlu Validasi)
+/// Kartu putih statistik (Siswa / Kuis / Perlu Remedial)
 class _StatCard extends StatelessWidget {
   final String value;
   final String label;

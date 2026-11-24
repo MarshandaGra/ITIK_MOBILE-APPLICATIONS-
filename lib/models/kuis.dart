@@ -1,4 +1,9 @@
+import 'dart:typed_data';
+
 class Soal {
+  static const String pilihanGanda = 'pilihanGanda';
+  static const String esai = 'esai';
+
   String? id;
   String pertanyaan;
   List<String> opsi; // A..E
@@ -6,7 +11,11 @@ class Soal {
   int? jawabanDipilih;
   double bobot;
   String tingkatKesulitan;
-  String? gambar; // path gambar lokal, opsional
+  Uint8List? gambar;
+  String? gambarNamaFile;
+  String? gambarUrl;
+  String jenis;
+  String jawabanEsai;
 
   Soal({
     this.id,
@@ -17,6 +26,10 @@ class Soal {
     this.bobot = 100,
     this.tingkatKesulitan = 'mudah',
     this.gambar,
+    this.gambarNamaFile,
+    this.gambarUrl,
+    this.jenis = pilihanGanda,
+    this.jawabanEsai = '',
   });
 }
 
@@ -29,6 +42,8 @@ class Kuis {
   String tanggal;
   int waktu; // alokasi waktu (menit)
   int kkm;
+  Uint8List? gambar;
+  String? tahunAjaran;
   String kategori;
   String deskripsi;
   String? idMapel;
@@ -41,7 +56,11 @@ class Kuis {
   int? soalCount;
   DateTime? createdAt; // BARU
   DateTime? batasWaktu;
- 
+  DateTime? tanggalTerbit;
+  DateTime? tanggalSelesai;
+
+  bool get isPublished => statusPublikasi == 'terbit';
+
   Kuis({
     required this.id,
     required this.judul,
@@ -52,8 +71,12 @@ class Kuis {
     required this.waktu,
     required this.kkm,
     required this.soal,
-    this.kategori = 'kuis harian',
     this.deskripsi = '',
+    this.gambar,
+    this.tahunAjaran,
+    this.kategori = 'kuis harian',
+    this.tanggalTerbit,
+    this.tanggalSelesai,
     this.idMapel,
     this.idTahunAjaran,
     this.idKuisAsal,

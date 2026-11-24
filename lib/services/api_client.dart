@@ -9,9 +9,25 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   static const _configuredUrl = String.fromEnvironment('API_BASE_URL');
+  static const _configuredAssetUrl = String.fromEnvironment('ASSET_BASE_URL');
   static String get baseUrl => _configuredUrl.isNotEmpty
       ? _configuredUrl
       : (kIsWeb ? 'http://127.0.0.1:8000/api' : 'http://10.0.2.2:8000/api');
+  static String get assetBaseUrl {
+    if (_configuredAssetUrl.isNotEmpty) return _configuredAssetUrl;
+
+    final base = Uri.parse(baseUrl);
+    final rootPath = base.path
+        .replaceFirst(RegExp(r'/api/?$'), '')
+        .replaceAll(RegExp(r'/+$'), '');
+    return base
+        .replace(
+            path: rootPath.isEmpty ? '/' : rootPath,
+            query: null,
+            fragment: null)
+        .toString()
+        .replaceFirst(RegExp(r'/+$'), '');
+  }
 
   final http.Client _client;
   String? token;
@@ -77,7 +93,6 @@ class ApiClient {
     bool update = false,
     bool authenticated = true,
   }) async {
-    
     if ((fileBytes == null) != (fileName == null)) {
       throw ArgumentError('fileBytes dan fileName harus diberikan bersama.');
     }
