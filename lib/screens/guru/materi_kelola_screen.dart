@@ -13,63 +13,41 @@ class MateriKelolaScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final list = app.materiGuruSaatIni.reversed.toList();
-    final mataPelajaran =
-        (app.currentUser?.mataPelajaran ?? 'Teknologi Informasi dan Komunikasi')
-            .replaceAll(' (TIK)', '');
+    final list = app.materiList;
+    final subject =
+        app.currentUser?.mataPelajaran ?? 'Teknologi Informasi dan Komunikasi';
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'PORTAL GURU',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ),
-                if (app.currentUser != null)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.card,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Text(
-                      app.currentUser!.nama,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-              ],
+            const Text(
+              'PORTAL GURU',
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+              ),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
             Text(
-              mataPelajaran,
+              subject,
               style: const TextStyle(
-                fontSize: 26,
+                color: AppColors.text,
+                fontSize: 28,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 6),
             Text(
               '${list.length} materi pembelajaran tersedia untuk mata pelajaran ini.',
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              style: const TextStyle(color: AppColors.muted, fontSize: 14),
             ),
             const SizedBox(height: 18),
+            SectionTitle('Materi Pembelajaran (${list.length})'),
             if (list.isEmpty)
               const EmptyState(
                   text:
@@ -115,8 +93,14 @@ class _MateriManageCard extends StatelessWidget {
     final ok = await confirmDialog(context,
         'Hapus "${materi.judul}"?\n\nTindakan ini tidak dapat dibatalkan.');
     if (ok) {
-      app.hapusMateri(materi.id);
-      if (context.mounted) showAppToast(context, 'Materi telah dihapus');
+      try {
+        await app.hapusMateri(materi.id);
+        if (context.mounted) showAppToast(context, 'Materi telah dihapus');
+      } catch (error) {
+        if (context.mounted) {
+          showAppToast(context, 'Gagal menghapus materi: $error');
+        }
+      }
     }
   }
 
@@ -131,17 +115,18 @@ class _MateriManageCard extends StatelessWidget {
           children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                    color: AppColors.text,
-                    borderRadius: BorderRadius.circular(12)),
+                  color: AppColors.text,
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 alignment: Alignment.center,
                 child: Text(
                   index.toString().padLeft(2, '0'),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -152,25 +137,24 @@ class _MateriManageCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('${m.bab} — ${m.judul}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 14)),
+                              fontWeight: FontWeight.w700, fontSize: 13.5)),
                       const SizedBox(height: 2),
                       Text(m.deskripsi,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted)),
                       const SizedBox(height: 6),
-                      Wrap(spacing: 6, runSpacing: 4, children: [
-                        Text('${m.bab} • Kelas ${m.kelas}',
-                            style: const TextStyle(
-                                fontSize: 10.5, color: AppColors.muted)),
-                        Text('PDF: ${m.pdfName}',
-                            style: const TextStyle(
-                                fontSize: 10.5, color: AppColors.muted)),
-                      ]),
+                      Text(
+                        [
+                          if (m.bab.isNotEmpty) m.bab,
+                          if (m.kelas.isNotEmpty) 'Kelas ${m.kelas}',
+                          if (m.pdfName.isNotEmpty) 'PDF: ${m.pdfName}',
+                        ].join(' • '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 10.5, color: AppColors.muted),
+                      ),
                     ]),
               ),
             ]),

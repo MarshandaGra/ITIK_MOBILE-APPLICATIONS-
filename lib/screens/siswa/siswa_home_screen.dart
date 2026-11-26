@@ -9,8 +9,42 @@ import 'kuis_play_screen.dart';
 import 'kuis_level_screen.dart';
 import 'siswa_materi_screen.dart';
 
-class SiswaHomeScreen extends StatelessWidget {
+class SiswaHomeScreen extends StatefulWidget {
   const SiswaHomeScreen({super.key});
+
+  @override
+  State<SiswaHomeScreen> createState() => _SiswaHomeScreenState();
+}
+
+class _SiswaHomeScreenState extends State<SiswaHomeScreen> {
+  String? _startingKuisId;
+
+  Future<void> _mulaiKuis(String kuisId, {String? remedialOfId}) async {
+    if (_startingKuisId != null) return;
+    setState(() => _startingKuisId = kuisId);
+    try {
+      final kuis = await context.read<AppProvider>().mulaiKuisSiswa(kuisId);
+      if (!mounted) return;
+      if (kuis.soal.isEmpty) {
+        showAppToast(context, 'Kuis ini belum memiliki soal.');
+        return;
+      }
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => KuisPlayScreen(
+            kuis: kuis,
+            remedialOfId: remedialOfId,
+            serverManaged: true,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal membuka kuis: $error');
+    } finally {
+      if (mounted) setState(() => _startingKuisId = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,276 +84,284 @@ class SiswaHomeScreen extends StatelessWidget {
     final infoKelas = kelas.isEmpty
         ? 'Semester Ganjil 2026'
         : '$kelas • Semester Ganjil 2026';
+    final ImageProvider<Object>? fotoProvider = user.foto != null
+        ? MemoryImage(user.foto!) as ImageProvider<Object>
+        : user.fotoUrl != null
+            ? NetworkImage(user.fotoUrl!) as ImageProvider<Object>
+            : null;
 
     return Scaffold(
       body: SafeArea(
         top: false, // header biru menembus sampai status bar
-        child: CustomScrollView(
-          slivers: [
-            // ===== HEADER BIRU (sudah berisi kartu statistik) =====
-            SliverToBoxAdapter(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
-                ),
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [AppColors.blue, AppColors.blueDark],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+        child: RefreshIndicator(
+          onRefresh: app.loadNilaiSiswa,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // ===== HEADER BIRU (sudah berisi kartu statistik) =====
+              SliverToBoxAdapter(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.blue, AppColors.blueDark],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        // Lingkaran dekoratif kanan atas
+                        Positioned(
+                          top: -50,
+                          right: -40,
+                          child: Container(
+                            width: 170,
+                            height: 170,
+                            decoration: const BoxDecoration(
+                              color: Colors.white10,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            20,
+                            MediaQuery.of(context).padding.top + 18,
+                            20,
+                            22,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(children: [
+                                      CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: Colors.white24,
+                                        backgroundImage: fotoProvider,
+                                        child: fotoProvider != null
+                                            ? null
+                                            : Text(
+                                                user.initials,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('Halo,',
+                                                style: TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 12)),
+                                            Text(
+                                              '$namaDepan!',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14.5),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ]),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _BellButton(
+                                      count: tugasRemedial == null ? 0 : 1),
+                                ],
+                              ),
+                              const SizedBox(height: 18),
+                              const Text(
+                                'Terus tingkatkan kemampuan TIK-mu 🚀',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                infoKelas,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.white70, fontSize: 12.5),
+                              ),
+                              const SizedBox(height: 18),
+                              // ===== 3 KARTU STATISTIK di dalam area biru =====
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: _StatCard(
+                                          value: '$totalMateri',
+                                          label: 'Materi')),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                      child: _StatCard(
+                                          value: '$totalKuis',
+                                          label: 'Kuis Tersedia')),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                      child: _StatCard(
+                                          value: '$pct%', label: 'Progres')),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Stack(
-                    children: [
-                      // Lingkaran dekoratif kanan atas
-                      Positioned(
-                        top: -50,
-                        right: -40,
-                        child: Container(
-                          width: 170,
-                          height: 170,
-                          decoration: const BoxDecoration(
-                            color: Colors.white10,
-                            shape: BoxShape.circle,
+                ),
+              ),
+
+              // ===== KONTEN =====
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    if (tugasRemedial != null)
+                      NoticeBox(
+                        title: 'Remedial Ditugaskan Guru',
+                        color: AppColors.red,
+                        background: AppColors.redLight,
+                        borderColor: const Color(0xFFF6C6C8),
+                        message:
+                            'Nilai kamu (${tugasRemedial.nilai}) pada ${tugasRemedial.kuis} belum mencapai KKM (${tugasRemedial.kkm}). Gurumu menugaskan kamu mengerjakan ulang kuis ini.',
+                        action: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.red),
+                            onPressed: () {
+                              final idKuisRemedial =
+                                  tugasRemedial.idKuisRemedial;
+                              if (idKuisRemedial == null ||
+                                  !tugasRemedial.remedialKuisTersedia) {
+                                showAppToast(
+                                  context,
+                                  'Kuis remedial belum diterbitkan atau tidak tersedia.',
+                                );
+                                return;
+                              }
+                              _mulaiKuis(
+                                idKuisRemedial,
+                                remedialOfId: tugasRemedial.id,
+                              );
+                            },
+                            icon: const Icon(Icons.trending_up, size: 18),
+                            label: const Text('Kerjakan Remedial Sekarang'),
                           ),
                         ),
                       ),
+                    // ===== BAGIAN 1: MATERI BELUM DIPELAJARI =====
+                    SectionTitle(
+                      'Belum Dipelajari',
+                      linkText: 'Lihat Semua',
+                      onLinkTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SiswaMateriScreen()),
+                      ),
+                    ),
+                    if (materiBelum.isEmpty)
                       Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          MediaQuery.of(context).padding.top + 18,
-                          20,
-                          22,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Center(
+                          child: Text(
+                            totalMateri == 0
+                                ? 'Belum ada materi.'
+                                : 'Semua materi sudah dipelajari 🎉',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Row(children: [
-                                    CircleAvatar(
-                                      radius: 20,
-                                      backgroundColor: Colors.white24,
-                                      backgroundImage: user.foto != null
-                                          ? MemoryImage(user.foto!)
-                                          : null,
-                                      child: user.foto != null
-                                          ? null
-                                          : Text(
-                                              user.initials,
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text('Halo,',
-                                              style: TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 12)),
-                                          Text(
-                                            '$namaDepan!',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 14.5),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ]),
-                                ),
-                                const SizedBox(width: 8),
-                                _BellButton(
-                                    count: tugasRemedial == null ? 0 : 1),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
-                            const Text(
-                              'Terus tingkatkan kemampuan TIK-mu 🚀',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              infoKelas,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 12.5),
-                            ),
-                            const SizedBox(height: 18),
-                            // ===== 3 KARTU STATISTIK di dalam area biru =====
-                            Row(
-                              children: [
-                                Expanded(
-                                    child: _StatCard(
-                                        value: '$totalMateri',
-                                        label: 'Materi')),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                    child: _StatCard(
-                                        value: '$totalKuis',
-                                        label: 'Kuis Tersedia')),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                    child: _StatCard(
-                                        value: '$pct%', label: 'Progres')),
-                              ],
-                            ),
-                          ],
+                      )
+                    else
+                      ...materiBelum.map(
+                        (m) => AppListItem(
+                          icon: Icons.picture_as_pdf_rounded,
+                          iconColor: AppColors.red,
+                          iconBg: AppColors.redLight,
+                          title: '${m.bab} — ${m.judul}',
+                          subtitle:
+                              '${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
+                          trailing: const Icon(Icons.chevron_right,
+                              color: AppColors.muted, size: 20),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    MateriDetailScreen(materiId: m.id)),
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+
+                    // ===== BAGIAN 2: KUIS BELUM DIKERJAKAN =====
+                    SectionTitle(
+                      'Belum Dikerjakan',
+                      linkText: 'Lihat Semua',
+                      onLinkTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const KuisLevelScreen()),
+                      ),
+                    ),
+                    if (kuisBelum.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Center(
+                          child: Text(
+                            totalKuis == 0
+                                ? 'Belum ada kuis.'
+                                : 'Semua kuis sudah dikerjakan 🎉',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.muted),
+                          ),
+                        ),
+                      )
+                    else
+                      ...kuisBelum.map(
+                        (k) => AppListItem(
+                          icon: Icons.quiz_rounded,
+                          iconColor: AppColors.orange,
+                          iconBg: AppColors.orange.withValues(alpha: 0.12),
+                          title: k.judul,
+                          subtitle: '${k.jumlahSoal} soal • ${k.level}',
+                          trailing: _startingKuisId == k.id
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.chevron_right,
+                                  color: AppColors.muted, size: 20),
+                          onTap: () => _mulaiKuis(k.id),
+                        ),
+                      ),
+                  ]),
                 ),
               ),
-            ),
-
-            // ===== KONTEN =====
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  if (tugasRemedial != null)
-                    NoticeBox(
-                      title: 'Remedial Ditugaskan Guru',
-                      color: AppColors.red,
-                      background: AppColors.redLight,
-                      borderColor: const Color(0xFFF6C6C8),
-                      message:
-                          'Nilai kamu (${tugasRemedial.nilai}) pada ${tugasRemedial.kuis} belum mencapai KKM (${tugasRemedial.kkm}). Gurumu menugaskan kamu mengerjakan ulang kuis ini.',
-                      action: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.red),
-                          onPressed: () {
-                            final kuis = app.kuisById(tugasRemedial.kuisId);
-                            if (kuis == null) {
-                              // Antisipasi: kuis sudah dihapus guru
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('Kuis remedial tidak ditemukan.')),
-                              );
-                              return;
-                            }
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => KuisPlayScreen(
-                                    kuis: kuis, remedialOfId: tugasRemedial.id),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.trending_up, size: 18),
-                          label: const Text('Kerjakan Remedial Sekarang'),
-                        ),
-                      ),
-                    ),
-                  // ===== BAGIAN 1: MATERI BELUM DIPELAJARI =====
-                  SectionTitle(
-                    'Belum Dipelajari',
-                    linkText: 'Lihat Semua',
-                    onLinkTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const SiswaMateriScreen()),
-                    ),
-                  ),
-                  if (materiBelum.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Center(
-                        child: Text(
-                          totalMateri == 0
-                              ? 'Belum ada materi.'
-                              : 'Semua materi sudah dipelajari 🎉',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.muted),
-                        ),
-                      ),
-                    )
-                  else
-                    ...materiBelum.map(
-                      (m) => AppListItem(
-                        icon: Icons.picture_as_pdf_rounded,
-                        iconColor: AppColors.red,
-                        iconBg: AppColors.redLight,
-                        title: '${m.bab} — ${m.judul}',
-                        subtitle:
-                            '${m.pdfName}${m.ukuran.isNotEmpty ? ' • ${m.ukuran}' : ''}',
-                        trailing: const Icon(Icons.chevron_right,
-                            color: AppColors.muted, size: 20),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  MateriDetailScreen(materiId: m.id)),
-                        ),
-                      ),
-                    ),
-
-                  // ===== BAGIAN 2: KUIS BELUM DIKERJAKAN =====
-                  SectionTitle(
-                    'Belum Dikerjakan',
-                    linkText: 'Lihat Semua',
-                    onLinkTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const KuisLevelScreen()),
-                    ),
-                  ),
-                  if (kuisBelum.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Center(
-                        child: Text(
-                          totalKuis == 0
-                              ? 'Belum ada kuis.'
-                              : 'Semua kuis sudah dikerjakan 🎉',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: AppColors.muted),
-                        ),
-                      ),
-                    )
-                  else
-                    ...kuisBelum.map(
-                      (k) => AppListItem(
-                        icon: Icons.quiz_rounded,
-                        iconColor: AppColors.orange,
-                        iconBg: AppColors.orange.withOpacity(0.12),
-                        title: k.judul,
-                        subtitle: '${k.soal.length} soal • ${k.level}',
-                        trailing: const Icon(Icons.chevron_right,
-                            color: AppColors.muted, size: 20),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => KuisPlayScreen(kuis: k)),
-                        ),
-                      ),
-                    ),
-                ]),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

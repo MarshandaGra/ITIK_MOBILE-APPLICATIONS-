@@ -1,21 +1,33 @@
 import 'dart:typed_data';
 
 class Soal {
-  static const pilihanGanda = 'Pilihan Ganda';
-  static const esai = 'Esai';
+  static const String pilihanGanda = 'pilihanGanda';
+  static const String esai = 'esai';
 
+  String? id;
   String pertanyaan;
-  List<String> opsi; // A..D
+  List<String> opsi; // A..E
   int jawaban; // index opsi yang benar
+  int? jawabanDipilih;
+  double bobot;
+  String tingkatKesulitan;
   Uint8List? gambar;
+  String? gambarNamaFile;
+  String? gambarUrl;
   String jenis;
   String jawabanEsai;
 
   Soal({
+    this.id,
     required this.pertanyaan,
     required this.opsi,
     required this.jawaban,
+    this.jawabanDipilih,
+    this.bobot = 100,
+    this.tingkatKesulitan = 'mudah',
     this.gambar,
+    this.gambarNamaFile,
+    this.gambarUrl,
     this.jenis = pilihanGanda,
     this.jawabanEsai = '',
   });
@@ -30,15 +42,24 @@ class Kuis {
   String tanggal;
   int waktu; // alokasi waktu (menit)
   int kkm;
-  String? deskripsi;
   Uint8List? gambar;
   String? tahunAjaran;
-  String? kategori;
+  String kategori;
+  String deskripsi;
+  String? idMapel;
+  String? idTahunAjaran;
+  String? idKuisAsal;
+  String statusPublikasi;
+  DateTime? waktuMulai;
+  DateTime? waktuSelesai;
+  List<Soal> soal;
+  int? soalCount;
+  DateTime? createdAt; // BARU
+  DateTime? batasWaktu;
   DateTime? tanggalTerbit;
   DateTime? tanggalSelesai;
-  List<Soal> soal;
-  DateTime? createdAt; // BARU
-  bool isPublished;
+
+  bool get isPublished => statusPublikasi == 'terbit';
 
   Kuis({
     required this.id,
@@ -49,14 +70,23 @@ class Kuis {
     required this.tanggal,
     required this.waktu,
     required this.kkm,
-    this.deskripsi,
+    required this.soal,
+    this.deskripsi = '',
     this.gambar,
     this.tahunAjaran,
-    this.kategori,
+    this.kategori = 'kuis harian',
     this.tanggalTerbit,
     this.tanggalSelesai,
-    required this.soal,
+    this.idMapel,
+    this.idTahunAjaran,
+    this.idKuisAsal,
+    this.statusPublikasi = 'draft',
+    this.waktuMulai,
+    this.waktuSelesai,
+    this.soalCount,
     this.createdAt, // BARU
-    this.isPublished = true,
+    this.batasWaktu,
   });
+
+  int get jumlahSoal => soalCount ?? soal.length;
 }

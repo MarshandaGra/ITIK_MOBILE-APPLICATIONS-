@@ -22,20 +22,22 @@ class GuruHomeScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Hanya hasil di bawah KKM yang belum mendapat penugasan remedial.
-    final hasilGuru = app.hasilGuruSaatIni;
-    final pending = hasilGuru
-        .where(
-            (h) => h.dibawahKkm && !h.remedialDitugaskan && !h.remedialSelesai)
+    // Hitung siswa yang nilainya di bawah KKM dan belum mendapat remedial.
+    final pending = app.hasilList
+        .where((h) =>
+            h.dibawahKkm && !h.remedialDitugaskan && !h.remedialSelesai)
         .length;
-    // CATATAN: "+ 2" dari kode aslimu dipertahankan (sepertinya penyesuaian data dummy).
-    final totalSiswa =
-        app.users.where((u) => u.role == UserRole.siswa).length + 2;
-    final totalKuis = app.kuisGuruSaatIni.length;
-    final totalMateri = app.materiGuruSaatIni.length;
+    final totalSiswa = app.users.where((u) => u.role == UserRole.siswa).length;
+    final totalKuis = app.kuisList.length;
+    final totalMateri = app.materiList.length;
 
     // Antisipasi: nama kosong
     final nama = user.nama.trim().isEmpty ? 'Guru' : user.nama.trim();
+    final ImageProvider<Object>? fotoProvider = user.foto != null
+        ? MemoryImage(user.foto!) as ImageProvider<Object>
+        : user.fotoUrl != null
+            ? NetworkImage(user.fotoUrl!) as ImageProvider<Object>
+            : null;
 
     return Scaffold(
       body: SafeArea(
@@ -91,10 +93,8 @@ class GuruHomeScreen extends StatelessWidget {
                                     CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.white24,
-                                      backgroundImage: user.foto != null
-                                          ? MemoryImage(user.foto!)
-                                          : null,
-                                      child: user.foto != null
+                                      backgroundImage: fotoProvider,
+                                      child: fotoProvider != null
                                           ? null
                                           : Text(
                                               user.initials,
@@ -183,8 +183,8 @@ class GuruHomeScreen extends StatelessWidget {
                     icon: Icons.fact_check_rounded,
                     iconColor: AppColors.green,
                     iconBg: AppColors.greenLight,
-                    title: 'Nilai & Remedial Siswa',
-                    subtitle: '$pending siswa perlu remedial',
+                    title: 'Validasi Nilai Siswa',
+                    subtitle: '$pending siswa di bawah KKM perlu remedial',
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(

@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/hasil_kuis.dart';
 import '../../models/kuis.dart';
+import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/shared_widgets.dart';
 import 'kuis_level_screen.dart';
-import 'kuis_play_screen.dart';
 
-class KuisResultScreen extends StatelessWidget {
-  final Kuis kuis;
-  final int nilai;
-  final int benar;
-  final int salah;
-  final List<int> jawabanSiswa;
-  final List<String> jawabanEsaiSiswa;
-
+class KuisResultScreen extends StatefulWidget {
   const KuisResultScreen({
     super.key,
     required this.kuis,
@@ -20,157 +17,148 @@ class KuisResultScreen extends StatelessWidget {
     required this.salah,
     required this.jawabanSiswa,
     this.jawabanEsaiSiswa = const [],
+    this.attemptId,
+    this.serverGraded = false,
+    this.resultStatusLabel,
   });
+
+  final Kuis kuis;
+  final double? nilai;
+  final int benar;
+  final int salah;
+  final List<int> jawabanSiswa;
+  final List<String> jawabanEsaiSiswa;
+  final String? attemptId;
+  final bool serverGraded;
+  final String? resultStatusLabel;
+
+  @override
+  State<KuisResultScreen> createState() => _KuisResultScreenState();
+}
+
+class _KuisResultScreenState extends State<KuisResultScreen> {
+  late Future<EvaluasiKuis>? _evaluasiFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _evaluasiFuture = widget.attemptId == null
+        ? null
+        : context.read<AppProvider>().loadEvaluasiSoal(widget.attemptId!);
+  }
+
+  void _cobaMuatUlangEvaluasi() {
+    setState(() {
+      _evaluasiFuture =
+          context.read<AppProvider>().loadEvaluasiSoal(widget.attemptId!);
+    });
+  }
+
+  EvaluasiKuis _evaluasiLokal() {
+    return EvaluasiKuis(
+      tampilEvaluasi: true,
+      soal: [
+        for (var index = 0; index < widget.kuis.soal.length; index++)
+          EvaluasiSoal(
+            pertanyaan: widget.kuis.soal[index].pertanyaan,
+            opsi: widget.kuis.soal[index].opsi,
+            jawabanBenar: widget.kuis.soal[index].jenis == Soal.esai
+                ? null
+                : widget.kuis.soal[index].jawaban,
+            jawabanDipilih: index < widget.jawabanSiswa.length &&
+                    widget.jawabanSiswa[index] >= 0
+                ? widget.jawabanSiswa[index]
+                : null,
+            jenis: widget.kuis.soal[index].jenis,
+            jawabanTeks: index < widget.jawabanEsaiSiswa.length
+                ? widget.jawabanEsaiSiswa[index]
+                : '',
+            bobot: widget.kuis.soal[index].bobot,
+            nilaiEsai: null,
+            catatanGuru: null,
+            gambarUrl: widget.kuis.soal[index].gambarUrl,
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final lulus = nilai >= kuis.kkm;
-    const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+    final lulus = widget.nilai != null &&
+        widget.kuis.kkm > 0 &&
+        widget.nilai! >= widget.kuis.kkm;
 
     return Scaffold(
+      appBar: simpleAppBar('Hasil Kuis'),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Kembali',
-                  onPressed: () =>
-                      Navigator.popUntil(context, (route) => route.isFirst),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const KuisLevelScreen()),
-                  ),
-                  child: const Text('Daftar Kuis'),
-                ),
-              ],
+            Text(
+              widget.kuis.judul,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.greenLight,
-                border: Border.all(color: const Color(0xFFC8EBD8)),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
+            const SizedBox(height: 4),
+            Text(
+              widget.nilai == null
+                  ? 'Jawaban esai sedang dinilai.'
+                  : lulus
+                      ? 'Kerja bagus!'
+                      : 'Terus berlatih!',
+              style: const TextStyle(color: AppColors.muted),
+            ),
+            const SizedBox(height: 16),
+            AppCard(
+              child: Column(
                 children: [
-                  const Icon(Icons.check_circle_outline,
-                      color: AppColors.green, size: 19),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      lulus
-                          ? 'Kuis berhasil dikumpulkan. Selamat, kamu lulus!'
-                          : 'Kuis berhasil dikumpulkan. Pelajari evaluasi jawabanmu.',
-                      style: const TextStyle(
-                          color: Color(0xFF256747), fontSize: 12.5),
+                  Text(
+                    widget.nilai == null
+                        ? 'Menunggu Penilaian'
+                        : formatSkor(widget.nilai!),
+                    style: TextStyle(
+                      fontSize: widget.nilai == null ? 20 : 36,
+                      fontWeight: FontWeight.w800,
+                      color: lulus ? AppColors.green : AppColors.orange,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  AppPill(
+                    label: lulus
+                        ? 'Lulus'
+                        : widget.resultStatusLabel ??
+                            (widget.nilai == null
+                                ? 'Menunggu Penilaian'
+                                : 'Menunggu Validasi'),
+                    color: lulus ? AppColors.green : AppColors.orange,
+                    background:
+                        lulus ? AppColors.greenLight : AppColors.orangeLight,
+                  ),
+                  const Divider(height: 28),
+                  _metric('KKM', formatSkor(widget.kuis.kkm)),
+                  if (!widget.serverGraded) ...[
+                    const Divider(height: 24),
+                    _metric('Jawaban benar', '${widget.benar}'),
+                    const Divider(height: 24),
+                    _metric('Jawaban salah', '${widget.salah}'),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            const Text('Hasil Kuis',
-                style: TextStyle(fontSize: 27, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text(kuis.judul,
-                style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+            _buildEvaluasi(),
             const SizedBox(height: 18),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 700;
-                final scoreCard = _ScoreCard(
-                  nilai: nilai,
-                  lulus: lulus,
-                  benar: benar,
-                  salah: salah,
-                  jumlahSoal: kuis.soal.length,
-                  kkm: kuis.kkm,
-                );
-                final detailCard = _DetailCard(kuis: kuis);
-                if (!wide) {
-                  return Column(
-                    children: [
-                      scoreCard,
-                      const SizedBox(height: 12),
-                      detailCard,
-                    ],
-                  );
-                }
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: scoreCard),
-                    const SizedBox(width: 14),
-                    Expanded(child: detailCard),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 18),
-            AppCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Evaluasi Soal',
-                      style:
-                          TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Pelajari setiap jawaban untuk mengevaluasi pemahamanmu.',
-                    style: TextStyle(color: AppColors.muted, fontSize: 12.5),
-                  ),
-                  const SizedBox(height: 14),
-                  ...List.generate(kuis.soal.length, (i) {
-                    final soal = kuis.soal[i];
-                    final jawaban =
-                        i < jawabanSiswa.length ? jawabanSiswa[i] : -1;
-                    final jawabanEsai =
-                        i < jawabanEsaiSiswa.length ? jawabanEsaiSiswa[i] : '';
-                    final benarSoal = soal.jenis == Soal.esai
-                        ? _jawabanEsaiBenar(jawabanEsai, soal.jawabanEsai)
-                        : jawaban == soal.jawaban;
-
-                    return Padding(
-                      padding: EdgeInsets.only(
-                          bottom: i == kuis.soal.length - 1 ? 0 : 12),
-                      child: _QuestionReview(
-                        nomor: i + 1,
-                        bobot: kuis.soal.isEmpty ? 0 : 100 / kuis.soal.length,
-                        soal: soal,
-                        benar: benarSoal,
-                        letters: letters,
-                        jawabanSiswa: jawaban,
-                        jawabanEsaiSiswa: jawabanEsai,
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => KuisPlayScreen(kuis: kuis)),
-              ),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Kerjakan Ulang Kuis'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
+            ElevatedButton(
               onPressed: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const KuisLevelScreen()),
               ),
-              child: const Text('Lihat Daftar Kuis'),
+              child: const Text('Lihat daftar kuis'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () =>
+                  Navigator.popUntil(context, (route) => route.isFirst),
+              child: const Text('Kembali ke beranda'),
             ),
           ],
         ),
@@ -178,352 +166,264 @@ class KuisResultScreen extends StatelessWidget {
     );
   }
 
-  static bool _jawabanEsaiBenar(String jawaban, String kunci) {
-    String normalize(String value) =>
-        value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
-    return normalize(jawaban) == normalize(kunci);
-  }
-}
+  Widget _buildEvaluasi() {
+    final future = _evaluasiFuture;
+    if (future == null) return _evaluasiContent(_evaluasiLokal());
 
-class _ScoreCard extends StatelessWidget {
-  final int nilai;
-  final bool lulus;
-  final int benar;
-  final int salah;
-  final int jumlahSoal;
-  final int kkm;
-
-  const _ScoreCard({
-    required this.nilai,
-    required this.lulus,
-    required this.benar,
-    required this.salah,
-    required this.jumlahSoal,
-    required this.kkm,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final statusColor = lulus ? AppColors.green : AppColors.red;
-    final statusBg = lulus ? AppColors.greenLight : AppColors.redLight;
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        children: [
-          const Text('Nilai Akhir Kamu',
-              style: TextStyle(color: AppColors.muted, fontSize: 12)),
-          const SizedBox(height: 8),
-          Text(
-            nilai.toStringAsFixed(2),
-            style: TextStyle(
-              color: statusColor,
-              fontSize: 48,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
+    return FutureBuilder<EvaluasiKuis>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const AppCard(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          _Badge(
-            label: lulus ? 'Lulus (KKM $kkm)' : 'Belum lulus (KKM $kkm)',
-            color: statusColor,
-            background: statusBg,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1),
-          ),
-          Row(
-            children: [
-              _ScoreMetric(
-                  value: '$benar',
-                  label: 'Jawaban Benar',
-                  color: AppColors.green),
-              _ScoreMetric(
-                  value: '$salah',
-                  label: 'Jawaban Salah',
-                  color: AppColors.red),
-              _ScoreMetric(
-                  value: '$jumlahSoal',
-                  label: 'Total Soal',
-                  color: AppColors.purple),
-            ],
-          ),
-        ],
-      ),
+          );
+        }
+        if (snapshot.hasError) {
+          return AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Evaluasi soal gagal dimuat.'),
+                const SizedBox(height: 8),
+                Text(
+                  '${snapshot.error}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                TextButton.icon(
+                  onPressed: _cobaMuatUlangEvaluasi,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Coba lagi'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final evaluasi = snapshot.data;
+        if (evaluasi == null) {
+          return const AppCard(child: Text('Evaluasi soal belum tersedia.'));
+        }
+        return _evaluasiContent(evaluasi);
+      },
     );
   }
-}
 
-class _DetailCard extends StatelessWidget {
-  final Kuis kuis;
+  Widget _evaluasiContent(EvaluasiKuis evaluasi) {
+    if (!evaluasi.tampilEvaluasi) {
+      return const AppCard(
+        child: Text(
+          'Evaluasi soal belum ditampilkan sesuai pengaturan kuis.',
+          style: TextStyle(color: AppColors.muted),
+        ),
+      );
+    }
 
-  const _DetailCard({required this.kuis});
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Detail Pengerjaan',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 18),
-          _DetailItem(label: 'Judul Kuis', value: kuis.judul),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                  child: _DetailItem(label: 'KKM', value: kuis.kkm.toString())),
-              Expanded(child: _DetailItem(label: 'Tingkat', value: kuis.level)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                  child: _DetailItem(
-                      label: 'Alokasi Waktu', value: '${kuis.waktu} menit')),
-              Expanded(
-                  child: _DetailItem(
-                      label: 'Jumlah Soal', value: '${kuis.soal.length} soal')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailItem extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _DetailItem({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+        const Text(
+          'Evaluasi Soal',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 4),
-        Text(value,
-            style:
-                const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+        const Text(
+          'Pelajari setiap jawaban untuk mengevaluasi pemahamanmu.',
+          style: TextStyle(color: AppColors.muted),
+        ),
+        const SizedBox(height: 12),
+        if (evaluasi.soal.isEmpty)
+          const AppCard(child: Text('Belum ada detail soal untuk ditampilkan.'))
+        else
+          ...evaluasi.soal.indexed.map(
+            (entry) => _EvaluasiSoalCard(
+              nomor: entry.$1 + 1,
+              soal: entry.$2,
+            ),
+          ),
       ],
     );
   }
+
+  Widget _metric(String label, String value) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.muted)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+        ],
+      );
 }
 
-class _ScoreMetric extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color color;
-
-  const _ScoreMetric(
-      {required this.value, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 3),
-        decoration: BoxDecoration(
-          color: AppColors.bg,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: TextStyle(
-                    color: color, fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 3),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 9.5, color: AppColors.muted)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color background;
-
-  const _Badge(
-      {required this.label, required this.color, required this.background});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-          color: background, borderRadius: BorderRadius.circular(99)),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-class _QuestionReview extends StatelessWidget {
-  final int nomor;
-  final double bobot;
-  final Soal soal;
-  final bool benar;
-  final List<String> letters;
-  final int jawabanSiswa;
-  final String jawabanEsaiSiswa;
-
-  const _QuestionReview({
+class _EvaluasiSoalCard extends StatelessWidget {
+  const _EvaluasiSoalCard({
     required this.nomor,
-    required this.bobot,
     required this.soal,
-    required this.benar,
-    required this.letters,
-    required this.jawabanSiswa,
-    required this.jawabanEsaiSiswa,
   });
 
+  final int nomor;
+  final EvaluasiSoal soal;
+
   @override
   Widget build(BuildContext context) {
-    final statusColor = benar ? AppColors.green : AppColors.red;
-    final statusBg = benar ? AppColors.greenLight : AppColors.redLight;
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Soal #$nomor  (Bobot: ${bobot.toStringAsFixed(1)}%)',
-                  style: const TextStyle(
-                      fontSize: 11.5, fontWeight: FontWeight.w800),
+    final isEssay = soal.jenis == Soal.esai || soal.jenis == 'esai';
+    final isCorrect = !isEssay &&
+        soal.jawabanBenar != null &&
+        soal.jawabanDipilih == soal.jawabanBenar;
+    const letters = ['A', 'B', 'C', 'D', 'E'];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Soal #$nomor (Bobot: ${formatSkor(soal.bobot)}%)',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
-              _Badge(
-                label: benar ? '✓ Jawaban Benar' : '× Jawaban Salah',
-                color: statusColor,
-                background: statusBg,
+                AppPill(
+                  label: isEssay
+                      ? (soal.nilaiEsai == null
+                          ? 'Menunggu Penilaian'
+                          : 'Sudah Dinilai')
+                      : isCorrect
+                          ? 'Jawaban Benar'
+                          : 'Jawaban Salah',
+                  color: isEssay
+                      ? AppColors.orange
+                      : isCorrect
+                          ? AppColors.green
+                          : AppColors.red,
+                  background: isEssay
+                      ? AppColors.orangeLight
+                      : isCorrect
+                          ? AppColors.greenLight
+                          : AppColors.redLight,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(soal.pertanyaan),
+            if (soal.gambarUrl != null) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.network(
+                  soal.gambarUrl!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Text(
+                    'Gambar soal gagal dimuat.',
+                    style: TextStyle(color: AppColors.muted),
+                  ),
+                ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(soal.pertanyaan,
-              style: const TextStyle(fontSize: 13, height: 1.45)),
-          if (soal.gambar != null) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.memory(
-                soal.gambar!,
-                width: double.infinity,
-                height: 180,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          if (soal.jenis == Soal.esai)
-            _EssayReview(
-              jawabanSiswa: jawabanEsaiSiswa,
-              kunci: soal.jawabanEsai,
-            )
-          else
-            ...List.generate(soal.opsi.length, (i) {
-              final isCorrect = i == soal.jawaban;
-              final isSelected = i == jawabanSiswa;
-              final color = isCorrect
-                  ? AppColors.green
-                  : isSelected
-                      ? AppColors.red
-                      : AppColors.border;
-              final background = isCorrect
-                  ? AppColors.greenLight
-                  : isSelected
-                      ? AppColors.redLight
-                      : AppColors.bg;
-              final badge = isCorrect
-                  ? '✓ Kunci Jawaban'
-                  : isSelected
-                      ? '× Pilihan Kamu'
-                      : null;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                decoration: BoxDecoration(
-                  color: background,
-                  border: Border.all(color: color),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${i < letters.length ? letters[i] : i + 1}.',
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(soal.opsi[i],
-                          style: const TextStyle(fontSize: 12)),
-                    ),
-                    if (badge != null) const SizedBox(width: 6),
-                    if (badge != null)
+            const SizedBox(height: 10),
+            if (isEssay)
+              _buildEssayAnswer()
+            else
+              ...List.generate(soal.opsi.length, (index) {
+                final correct = index == soal.jawabanBenar;
+                final selectedIncorrect =
+                    index == soal.jawabanDipilih && !correct;
+                final color = correct
+                    ? AppColors.green
+                    : selectedIncorrect
+                        ? AppColors.red
+                        : AppColors.border;
+                final background = correct
+                    ? AppColors.greenLight
+                    : selectedIncorrect
+                        ? AppColors.redLight
+                        : AppColors.bg;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: color),
+                  ),
+                  child: Row(
+                    children: [
                       Text(
-                        badge,
-                        style: TextStyle(
-                            fontSize: 9.5,
-                            color: isCorrect ? AppColors.green : AppColors.red,
-                            fontWeight: FontWeight.w700),
+                        '${letters[index]}.',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                  ],
-                ),
-              );
-            }),
-        ],
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(soal.opsi[index])),
+                      if (correct)
+                        const Text(
+                          'Kunci Jawaban',
+                          style: TextStyle(
+                            color: AppColors.green,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                      else if (selectedIncorrect)
+                        const Text(
+                          'Pilihan Kamu',
+                          style: TextStyle(
+                            color: AppColors.red,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+            if (!isEssay && soal.jawabanDipilih == null)
+              const Text(
+                'Kamu tidak menjawab soal ini.',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+          ],
+        ),
       ),
     );
   }
-}
 
-class _EssayReview extends StatelessWidget {
-  final String jawabanSiswa;
-  final String kunci;
-
-  const _EssayReview({required this.jawabanSiswa, required this.kunci});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildEssayAnswer() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          jawabanSiswa.isEmpty
-              ? 'Jawabanmu: Tidak dijawab'
-              : 'Jawabanmu: $jawabanSiswa',
-          style: const TextStyle(fontSize: 12.5, color: AppColors.red),
+        const Text(
+          'Jawabanmu',
+          style: TextStyle(
+            color: AppColors.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 4),
-        Text('Kunci jawaban: $kunci',
+        Text(soal.jawabanTeks.isEmpty ? 'Tidak dijawab' : soal.jawabanTeks),
+        if (soal.nilaiEsai != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Nilai: ${formatSkor(soal.nilaiEsai!)} / ${formatSkor(soal.bobot)}',
             style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.green,
-                fontWeight: FontWeight.w700)),
+              color: AppColors.green,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+        if (soal.catatanGuru?.isNotEmpty ?? false) ...[
+          const SizedBox(height: 8),
+          Text('Catatan guru: ${soal.catatanGuru}'),
+        ],
       ],
     );
   }

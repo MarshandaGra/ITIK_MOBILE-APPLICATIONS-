@@ -21,6 +21,41 @@ class SiswaMateriScreen extends StatelessWidget {
             const Text('Pilih bab materi untuk mulai belajar TIK dasar.',
                 style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
             const SizedBox(height: 14),
+            if (app.materiLoadError != null)
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Materi gagal dimuat.'),
+                    const SizedBox(height: 8),
+                    Text(
+                      app.materiLoadError!,
+                      style:
+                          const TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    TextButton.icon(
+                      onPressed: app.materiLoading
+                          ? null
+                          : () => app.loadRemoteData(),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            if (app.materiLoading && app.materiList.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            if (!app.materiLoading &&
+                app.materiLoadError == null &&
+                app.materiList.isEmpty)
+              const AppCard(
+                child: Text('Belum ada materi yang tersedia.'),
+              ),
             ...app.materiList.map((m) => AppListItem(
                   icon: Icons.picture_as_pdf_rounded,
                   iconColor: AppColors.red,

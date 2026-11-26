@@ -21,43 +21,39 @@ class _KuisKelolaScreenState extends State<KuisKelolaScreen> {
   static const _semuaKategori = 'Semua';
   String _kategoriFilter = _semuaKategori;
   _StatusFilter _statusFilter = _StatusFilter.semua;
-  bool _showQuizList = false;
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    if (!_showQuizList) {
-      return _buildSubjectOverview(context, app);
-    }
-
-    final kuisKategori = app.kuisGuruSaatIni
+    final list = app.kuisList;
+    final subject = app.currentUser?.mataPelajaran ?? MataPelajaranGuru.tik;
+    final subjectLabel = subject == MataPelajaranGuru.tik
+        ? 'Teknologi Informasi dan Komunikasi (TIK)'
+        : subject;
+    final subjectCode =
+        subject == MataPelajaranGuru.bahasaIndonesia ? 'MP002' : 'MP001';
+    final kategoriKuisOptions =
+        list.map((kuis) => kuis.kategori).toSet().toList()..sort();
+    final kuisKategori = list
         .where((kuis) =>
             _kategoriFilter == _semuaKategori ||
             kuis.kategori == _kategoriFilter)
-        .toList()
-        .reversed
         .toList();
-    final list = kuisKategori.where((kuis) {
-      switch (_statusFilter) {
-        case _StatusFilter.semua:
-          return true;
-        case _StatusFilter.terbit:
-          return kuis.isPublished;
-        case _StatusFilter.draft:
-          return !kuis.isPublished;
-      }
+    final kuisTerfilter = kuisKategori.where((kuis) {
+      final cocokStatus = switch (_statusFilter) {
+        _StatusFilter.semua => true,
+        _StatusFilter.terbit => kuis.isPublished,
+        _StatusFilter.draft => !kuis.isPublished,
+      };
+      return cocokStatus;
     }).toList();
-    final statusLabel =
-        _statusFilter == _StatusFilter.terbit ? 'Terbit' : 'Draft';
-    final statusEmptyMessage = _kategoriFilter == _semuaKategori
-        ? 'Belum ada kuis berstatus $statusLabel.'
-        : 'Belum ada kuis berstatus $statusLabel untuk kategori $_kategoriFilter.';
     final groupedList = <String, List<Kuis>>{};
-    for (final kuis in list) {
+    for (final kuis in kuisTerfilter) {
       final materi = app.materiById(kuis.materiId);
-      final bab =
-          materi == null ? 'Materi lainnya' : '${materi.bab} - ${materi.judul}';
-      groupedList.putIfAbsent(bab, () => []).add(kuis);
+      final groupName = materi == null
+          ? 'Belum terkait materi'
+          : '${materi.bab} — ${materi.judul}';
+      groupedList.putIfAbsent(groupName, () => []).add(kuis);
     }
 
     return Scaffold(
@@ -65,50 +61,37 @@ class _KuisKelolaScreenState extends State<KuisKelolaScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'PORTAL GURU',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => setState(() => _showQuizList = false),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                  label: const Text('Mata Pelajaran'),
-                ),
-              ],
+            const Text(
+              'PORTAL GURU',
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.4,
+              ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             const Text(
               'Kuis & Soal',
               style: TextStyle(
+                color: AppColors.text,
                 fontSize: 28,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
-              'Kelola kuis mata pelajaran: ${app.currentUser?.mataPelajaran ?? 'TIK'}',
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              'Kelola kuis mata pelajaran: $subjectLabel',
+              style: const TextStyle(color: AppColors.muted, fontSize: 14),
             ),
             const SizedBox(height: 18),
             _SubjectSummaryBanner(
-              subject: app.currentUser?.mataPelajaran ?? 'TIK',
-              quizCount: app.kuisGuruSaatIni.length,
-              code: app.currentUser?.mataPelajaran == 'Bahasa Indonesia'
-                  ? 'MP002'
-                  : 'MP001',
+              subject: subjectLabel,
+              quizCount: list.length,
+              code: subjectCode,
             ),
-            const SizedBox(height: 12),
-            const SizedBox(height: 10),
+            const SizedBox(height: 16),
             Container(
               height: 42,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -179,14 +162,11 @@ class _KuisKelolaScreenState extends State<KuisKelolaScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            SectionTitle('Kuis (${list.length})'),
-            if (list.isEmpty)
-              EmptyState(
-                  text: _statusFilter != _StatusFilter.semua
-                      ? statusEmptyMessage
-                      : _kategoriFilter == _semuaKategori
-                          ? 'Belum ada kuis yang dibuat.\nTekan tombol di bawah untuk membuat kuis pertama.'
-                          : 'Belum ada kuis kategori $_kategoriFilter.')
+            SectionTitle('Kuis (${kuisTerfilter.length})'),
+            if (kuisTerfilter.isEmpty)
+              const EmptyState(
+                  text:
+                      'Belum ada kuis yang dibuat.\nTekan tombol di bawah untuk membuat kuis pertama.')
             else
               ...groupedList.entries.expand((entry) => [
                     Padding(
@@ -223,138 +203,6 @@ class _KuisKelolaScreenState extends State<KuisKelolaScreen> {
             context, MaterialPageRoute(builder: (_) => const KuisFormScreen())),
         icon: const Icon(Icons.add),
         label: const Text('Tambahkan Kuis'),
-      ),
-    );
-  }
-
-  Widget _buildSubjectOverview(BuildContext context, AppProvider app) {
-    final mataPelajaranGuru =
-        app.currentUser?.mataPelajaran ?? MataPelajaranGuru.tik;
-    final mataPelajaran = [mataPelajaranGuru];
-
-    Widget kartuMataPelajaran(String nama) {
-      final kode =
-          nama == MataPelajaranGuru.bahasaIndonesia ? 'MP002' : 'MP001';
-      final label = nama == MataPelajaranGuru.tik
-          ? 'Teknologi Informasi dan Komunikasi'
-          : nama;
-      final kuisAktif = app.kuisList.where((kuis) {
-        final materi = app.materiById(kuis.materiId);
-        return materi?.mataPelajaran == nama && kuis.isPublished;
-      }).length;
-
-      return _SubjectCard(
-        title: label,
-        code: kode,
-        activeQuizCount: kuisAktif,
-        onTap: () {
-          if (nama != mataPelajaranGuru) {
-            showAppToast(
-              context,
-              'Akun guru ini hanya dapat mengelola $mataPelajaranGuru',
-            );
-            return;
-          }
-          setState(() => _showQuizList = true);
-        },
-      );
-    }
-
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
-          children: [
-            const Text(
-              'PORTAL GURU',
-              style: TextStyle(
-                color: AppColors.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.4,
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Kuis & Soal',
-              style: TextStyle(
-                color: AppColors.text,
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Pilih mata pelajaran untuk mengelola kuis dan soal.',
-              style: TextStyle(color: AppColors.muted, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            AppCard(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Pilih Mata Pelajaran',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Klik mata pelajaran untuk mengelola kuis dan soal di dalamnya.',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cards = mataPelajaran
-                          .map(kartuMataPelajaran)
-                          .toList(growable: false);
-                      if (constraints.maxWidth >= 700) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (var index = 0;
-                                index < cards.length;
-                                index++) ...[
-                              if (index > 0) const SizedBox(width: 16),
-                              Expanded(child: cards[index]),
-                            ],
-                          ],
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (var index = 0;
-                              index < cards.length;
-                              index++) ...[
-                            SizedBox(
-                              width: double.infinity,
-                              child: cards[index],
-                            ),
-                            if (index < cards.length - 1)
-                              const SizedBox(height: 12),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            const Text(
-              'ITIK · Portal Guru — Media Pembelajaran TIK',
-              style: TextStyle(color: AppColors.muted, fontSize: 11.5),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -409,86 +257,6 @@ class _SubjectSummaryBanner extends StatelessWidget {
             ),
           ),
           const Icon(Icons.menu_book_rounded, color: Colors.white70),
-        ],
-      ),
-    );
-  }
-}
-
-class _SubjectCard extends StatelessWidget {
-  final String title;
-  final String code;
-  final int activeQuizCount;
-  final VoidCallback onTap;
-
-  const _SubjectCard({
-    required this.title,
-    required this.code,
-    required this.activeQuizCount,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.purpleLight,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: AppColors.purple,
-              size: 21,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            code,
-            style: const TextStyle(color: AppColors.muted, fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          const Divider(height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '$activeQuizCount kuis aktif',
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const Text(
-                'Kelola',
-                style: TextStyle(
-                  color: AppColors.purple,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.arrow_forward_rounded,
-                color: AppColors.purple,
-                size: 15,
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -559,30 +327,48 @@ class _KuisManageCard extends StatelessWidget {
 
   Future<void> _hapus(BuildContext context) async {
     final ok = await confirmDialog(context,
-        'Hapus "${kuis.judul}" beserta ${kuis.soal.length} soal di dalamnya?\n\nTindakan ini tidak dapat dibatalkan.');
+        'Arsipkan kuis "${kuis.judul}"? Kuis tidak akan terlihat oleh siswa.');
     if (ok) {
-      app.hapusKuis(kuis.id);
-      if (context.mounted) showAppToast(context, 'Kuis telah dihapus');
+      try {
+        await app.hapusKuis(kuis.id);
+        if (context.mounted) {
+          showAppToast(context, 'Kuis berhasil diarsipkan.');
+        }
+      } catch (error) {
+        if (context.mounted) {
+          showAppToast(context, 'Gagal mengarsipkan kuis: $error');
+        }
+      }
     }
   }
 
-  void _ubahStatus(BuildContext context) {
-    if (!kuis.isPublished && kuis.soal.isEmpty) {
+  Future<void> _ubahStatus(BuildContext context) async {
+    if (kuis.isPublished) {
+      showAppToast(
+          context, 'Kuis yang sudah terbit tidak dapat dijadikan draft.');
+      return;
+    }
+    if (kuis.soal.isEmpty) {
       showAppToast(
           context, 'Tambahkan minimal satu soal sebelum menerbitkan kuis');
       return;
     }
-    app.setKuisPublished(kuis.id, !kuis.isPublished);
-    showAppToast(context,
-        kuis.isPublished ? 'Kuis diterbitkan' : 'Kuis dipindahkan ke draft');
+    try {
+      await app.publishKuis(kuis.id);
+      if (context.mounted) {
+        showAppToast(context, 'Kuis berhasil diterbitkan.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        showAppToast(context, 'Gagal menerbitkan kuis: $error');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final k = kuis;
     final m = app.materiById(k.materiId);
-    final adaGambar = k.soal.where((s) => s.gambar != null).length;
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppCard(
@@ -612,16 +398,15 @@ class _KuisManageCard extends StatelessWidget {
                                     fontSize: 13.5))),
                         LevelPill(level: k.level),
                       ]),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 2),
                       AppPill(
                         label: k.isPublished ? 'Terbit' : 'Draft',
-                        color:
-                            k.isPublished ? AppColors.green : AppColors.orange,
+                        color: k.isPublished ? AppColors.green : AppColors.red,
                         background: k.isPublished
                             ? AppColors.greenLight
-                            : AppColors.orangeLight,
+                            : AppColors.redLight,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 6),
                       Text(
                           m != null
                               ? '${m.bab} — ${m.judul}'
@@ -630,12 +415,7 @@ class _KuisManageCard extends StatelessWidget {
                               fontSize: 11.5, color: AppColors.muted)),
                       const SizedBox(height: 6),
                       Wrap(spacing: 6, runSpacing: 4, children: [
-                        AppPill(
-                          label: k.kategori ?? 'Tanpa kategori',
-                          color: AppColors.purple,
-                          background: AppColors.purpleLight,
-                        ),
-                        Text('${k.soal.length} soal',
+                        Text('${k.jumlahSoal} soal',
                             style: const TextStyle(
                                 fontSize: 10.5, color: AppColors.muted)),
                         Text('KKM ${k.kkm}',
@@ -644,10 +424,9 @@ class _KuisManageCard extends StatelessWidget {
                         Text('${k.waktu} menit',
                             style: const TextStyle(
                                 fontSize: 10.5, color: AppColors.muted)),
-                        if (adaGambar > 0)
-                          Text('🖼 $adaGambar bergambar',
-                              style: const TextStyle(
-                                  fontSize: 10.5, color: AppColors.muted)),
+                        Text(k.kategori,
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AppColors.muted)),
                         Text('oleh ${k.oleh}',
                             style: const TextStyle(
                                 fontSize: 10.5, color: AppColors.muted)),
@@ -684,10 +463,12 @@ class _KuisManageCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => KuisFormScreen(kuisId: k.id))),
+                  onPressed: k.statusPublikasi == 'draft'
+                      ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => KuisFormScreen(kuisId: k.id)))
+                      : null,
                   icon: const Icon(Icons.edit_outlined, size: 16),
                   label: const Text('Edit', style: TextStyle(fontSize: 12)),
                 ),

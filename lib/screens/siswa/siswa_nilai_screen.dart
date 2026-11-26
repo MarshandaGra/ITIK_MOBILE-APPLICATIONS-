@@ -18,17 +18,50 @@ class SiswaNilaiScreen extends StatelessWidget {
     return Scaffold(
       appBar: simpleAppBar('Nilai & Riwayat Kuis'),
       body: SafeArea(
-        child: list.isEmpty
-            ? const EmptyState(
-                text: 'Belum ada riwayat kuis.\nYuk kerjakan kuis pertamamu!')
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                itemCount: list.length,
-                itemBuilder: (context, i) {
-                  final h = list[i];
-                  return _HasilCard(hasil: h, app: app);
-                },
-              ),
+        child: RefreshIndicator(
+          onRefresh: app.loadNilaiSiswa,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: [
+              if (app.nilaiLoading && list.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              if (app.nilaiLoadError != null)
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Nilai dan riwayat gagal dimuat.'),
+                      const SizedBox(height: 8),
+                      Text(
+                        app.nilaiLoadError!,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.muted),
+                      ),
+                      TextButton.icon(
+                        onPressed: app.nilaiLoading ? null : app.loadNilaiSiswa,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Coba lagi'),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!app.nilaiLoading &&
+                  app.nilaiLoadError == null &&
+                  list.isEmpty)
+                const SizedBox(
+                  height: 220,
+                  child: EmptyState(
+                      text:
+                          'Belum ada riwayat kuis.\nYuk kerjakan kuis pertamamu!'),
+                ),
+              ...list.map((hasil) => _HasilCard(hasil: hasil, app: app)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -52,11 +85,13 @@ class _HasilCard extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => KuisResultScreen(
           kuis: kuis,
-          nilai: hasil.nilai,
+          nilai: hasil.nilaiMenunggu ? null : hasil.nilai,
           benar: hasil.benar,
           salah: salah,
           jawabanSiswa: hasil.jawabanSiswa,
-          jawabanEsaiSiswa: hasil.jawabanEsaiSiswa,
+          attemptId: hasil.id,
+          serverGraded: true,
+          resultStatusLabel: hasil.statusLabel,
         ),
       ),
     );
@@ -94,13 +129,13 @@ class _HasilCard extends StatelessWidget {
                                   background: AppColors.redLight),
                           ]),
                       const SizedBox(height: 3),
-                      Text('${h.tanggal} • KKM ${h.kkm}',
+                      Text('${h.tanggal} • KKM ${formatSkor(h.kkm)}',
                           style: const TextStyle(
                               fontSize: 11.5, color: AppColors.muted)),
                     ],
                   ),
                 ),
-                Text('${h.nilai}',
+                Text(formatSkor(h.nilai),
                     style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -128,68 +163,98 @@ class _HasilCard extends StatelessWidget {
                           color: AppColors.blueLight,
                           borderRadius: BorderRadius.circular(99),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.visibility_outlined,
-                              size: 13, color: AppColors.blue),
-                          const SizedBox(width: 4),
-                          const Text('Detail',
-                              style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.blue)),
-                        ]),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.visibility_outlined,
+                                  size: 13, color: AppColors.blue),
+                              SizedBox(width: 4),
+                              Text('Detail',
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.blue)),
+                            ]),
                       ),
                     ),
                     AppPill(
-                      label: dibawahKkm ? 'Belum Tuntas' : 'Lulus KKM',
-                      color: dibawahKkm ? AppColors.red : AppColors.green,
-                      background: dibawahKkm
-                          ? AppColors.redLight
-                          : AppColors.greenLight,
+                      label: h.statusLabel,
+                      color: h.status == StatusValidasi.divalidasi
+                          ? AppColors.green
+                          : const Color(0xFFB9701C),
+                      background: h.status == StatusValidasi.divalidasi
+                          ? AppColors.greenLight
+                          : const Color(0xFFFFF1E2),
                     ),
                   ],
                 ),
               ],
             ),
 
-            if (dibawahKkm && h.remedialDitugaskan && !h.remedialSelesai) ...[
+            if (dibawahKkm) ...[
               const Divider(height: 22),
-              const Row(children: [
-                Icon(Icons.error_outline, size: 14, color: Color(0xFFB9701C)),
-                SizedBox(width: 5),
-                Text('Remedial ditugaskan guru',
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFFB9701C),
-                        fontWeight: FontWeight.w700)),
-              ]),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style:
-                      ElevatedButton.styleFrom(backgroundColor: AppColors.red),
-                  onPressed: () {
-                    final kuis = app.kuisById(h.kuisId);
-                    if (kuis != null) {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => KuisPlayScreen(
-                                  kuis: kuis, remedialOfId: h.id)));
-                    }
-                  },
-                  icon: const Icon(Icons.trending_up, size: 18),
-                  label: const Text('Kerjakan Remedial Sekarang'),
-                ),
-              ),
-            ] else if (dibawahKkm) ...[
-              const Divider(height: 22),
-              const Text('Di bawah KKM — menunggu tinjauan guru',
+              if (!h.remedialDitugaskan)
+                const Text(
+                  'Belum ada tugas remedial dari guru.',
                   style: TextStyle(
                       fontSize: 11.5,
-                      color: AppColors.red,
-                      fontWeight: FontWeight.w700)),
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w700),
+                )
+              else if (h.remedialSelesai)
+                const AppPill(
+                  label: 'Remedial Selesai',
+                  color: AppColors.green,
+                  background: AppColors.greenLight,
+                )
+              else ...[
+                Text(
+                  'Remedial ditugaskan${h.kuisRemedial == null ? '' : ': ${h.kuisRemedial!.judul}'}',
+                  style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFFB9701C),
+                      fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.red),
+                    onPressed: h.remedialKuisTersedia &&
+                            h.idKuisRemedial != null
+                        ? () async {
+                            try {
+                              final remedialKuis =
+                                  await app.mulaiKuisSiswa(h.idKuisRemedial!);
+                              if (!context.mounted) return;
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => KuisPlayScreen(
+                                    kuis: remedialKuis,
+                                    remedialOfId: h.id,
+                                    serverManaged: true,
+                                  ),
+                                ),
+                              );
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppToast(
+                                  context,
+                                  'Gagal membuka kuis remedial: $error',
+                                );
+                              }
+                            }
+                          }
+                        : null,
+                    icon: const Icon(Icons.trending_up, size: 18),
+                    label: Text(h.remedialKuisTersedia
+                        ? 'Kerjakan Remedial Sekarang'
+                        : 'Kuis remedial belum diterbitkan'),
+                  ),
+                ),
+              ],
             ],
           ],
         ),

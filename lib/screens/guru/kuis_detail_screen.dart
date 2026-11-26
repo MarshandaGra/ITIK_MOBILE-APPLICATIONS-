@@ -1,503 +1,507 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/app_provider.dart';
 import '../../models/kuis.dart';
+import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'kuis_form_screen.dart';
 import 'soal_form_screen.dart';
 
-class KuisDetailScreen extends StatelessWidget {
+class KuisDetailScreen extends StatefulWidget {
   final String kuisId;
+
   const KuisDetailScreen({super.key, required this.kuisId});
 
-  Future<void> _hapusKuis(BuildContext context, AppProvider app, Kuis k) async {
-    final ok = await confirmDialog(context,
-        'Hapus "${k.judul}" beserta ${k.soal.length} soal di dalamnya?\n\nTindakan ini tidak dapat dibatalkan.');
-    if (ok) {
-      app.hapusKuis(k.id);
-      if (context.mounted) {
-        Navigator.pop(context);
-        showAppToast(context, 'Kuis telah dihapus');
-      }
+  @override
+  State<KuisDetailScreen> createState() => _KuisDetailScreenState();
+}
+
+class _KuisDetailScreenState extends State<KuisDetailScreen> {
+  late Future<void> _loading;
+
+  @override
+  void initState() {
+    super.initState();
+    _loading = context.read<AppProvider>().loadKuisDetail(widget.kuisId);
+  }
+
+  Future<void> _hapusKuis(AppProvider app, Kuis quiz) async {
+    final confirmed = await confirmDialog(context,
+        'Arsipkan kuis "${quiz.judul}"? Kuis tidak akan terlihat oleh siswa.');
+    if (!confirmed || !mounted) return;
+    try {
+      await app.hapusKuis(quiz.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+      showAppToast(context, 'Kuis berhasil diarsipkan.');
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal mengarsipkan kuis: $error');
     }
   }
 
-  Future<void> _hapusSoal(
-      BuildContext context, AppProvider app, String kuisId, int index) async {
-    final ok = await confirmDialog(
+  Future<void> _hapusSoal(AppProvider app, Kuis quiz, int index) async {
+    final confirmed = await confirmDialog(
         context, 'Hapus soal nomor ${index + 1} dari kuis ini?');
-    if (ok) {
-      app.hapusSoal(kuisId, index);
-      if (context.mounted) showAppToast(context, 'Soal telah dihapus');
+    if (!confirmed || !mounted) return;
+    try {
+      await app.hapusSoal(quiz.id, index);
+      if (mounted) showAppToast(context, 'Soal berhasil dihapus.');
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal menghapus soal: $error');
+    }
+  }
+
+  Future<void> _publish(AppProvider app, Kuis quiz) async {
+    try {
+      await app.publishKuis(quiz.id);
+      if (mounted) showAppToast(context, 'Kuis berhasil dipublikasikan.');
+    } catch (error) {
+      if (mounted) showAppToast(context, 'Gagal mempublikasikan kuis: $error');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final k = app.kuisById(kuisId);
-    if (k == null) {
-      return const Scaffold(body: Center(child: Text('Kuis tidak ditemukan')));
-    }
-    final m = app.materiById(k.materiId);
-    const letters = ['A', 'B', 'C', 'D', 'E'];
+    return FutureBuilder<void>(
+      future: _loading,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Scaffold(
+            appBar: simpleAppBar('Detail Kuis'),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: simpleAppBar('Detail Kuis'),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Gagal memuat detail kuis: ${snapshot.error}'),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () => setState(() {
+                        _loading = context
+                            .read<AppProvider>()
+                            .loadKuisDetail(widget.kuisId);
+                      }),
+                      child: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        final quiz = app.kuisById(widget.kuisId);
+        if (quiz == null) {
+          return Scaffold(
+            appBar: simpleAppBar('Detail Kuis'),
+            body: const Center(child: Text('Kuis tidak ditemukan.')),
+          );
+        }
+
+        return _buildQuiz(context, app, quiz);
+      },
+    );
+  }
+
+  Widget _buildQuiz(BuildContext context, AppProvider app, Kuis quiz) {
+    final materi = app.materiById(quiz.materiId);
+    final isDraft = quiz.statusPublikasi == 'draft';
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
           children: [
-            const Text(
-              'PORTAL GURU',
-              style: TextStyle(
-                color: AppColors.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.4,
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, size: 16),
+                  label: const Text('Kembali'),
+                ),
+                if (isDraft)
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => KuisFormScreen(kuisId: quiz.id),
+                      ),
+                    ),
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit Kuis'),
+                  ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.settings_outlined, size: 16),
+                  label: const Text('Kelola Kuis'),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final buttonStyle = OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                );
-
-                Widget label(String value) => FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(value, maxLines: 1),
-                    );
-
-                return Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: buttonStyle,
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                        label: label('Kembali'),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: buttonStyle,
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => KuisFormScreen(kuisId: k.id),
-                          ),
-                        ),
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: label('Edit Kuis'),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.purple,
-                          minimumSize: const Size(0, 44),
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                        ),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SoalFormScreen(kuisId: k.id),
-                          ),
-                        ),
-                        icon: const Icon(Icons.settings_outlined, size: 16),
-                        label: label('Kelola Kuis'),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 14),
             Text(
-              k.judul,
+              quiz.judul,
               style: const TextStyle(
-                fontSize: 27,
+                fontSize: 26,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 6),
             const Text(
               'Detail kuis, jadwal, daftar butir soal, dan publikasi.',
-              style: TextStyle(color: AppColors.muted, fontSize: 13),
+              style: TextStyle(fontSize: 14, color: AppColors.muted),
             ),
-            const SizedBox(height: 18),
-            if (!k.isPublished)
+            if (quiz.isPublished) ...[
+              const SizedBox(height: 18),
               Container(
-                padding: const EdgeInsets.all(14),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFFCF2),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                  border: Border.fromBorderSide(
-                    BorderSide(color: Color(0xFFFFE6A6)),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Kuis masih dalam status DRAFT',
-                            style: TextStyle(
-                              color: Color(0xFF9A6700),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Publikasikan kuis agar siswa dapat melihat dan mengerjakannya.',
-                            style: TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () {
-                        if (k.soal.isEmpty) {
-                          showAppToast(
-                            context,
-                            'Tambahkan minimal satu soal sebelum menerbitkan kuis',
-                          );
-                          return;
-                        }
-                        app.setKuisPublished(k.id, true);
-                        showAppToast(context, 'Kuis diterbitkan');
-                      },
-                      child: const Text('Publikasikan'),
-                    ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.greenLight,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.check_circle_outline, color: AppColors.green),
-                    SizedBox(width: 8),
+                    Icon(Icons.check_circle_outline,
+                        color: AppColors.green, size: 20),
+                    SizedBox(width: 10),
                     Text(
                       'Kuis telah diterbitkan',
                       style: TextStyle(
                         color: AppColors.green,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-            const SizedBox(height: 14),
-            AppCard(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Informasi Kuis',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        AppPill(
-                          label: k.isPublished ? 'Terbit' : 'Draft',
-                          color: k.isPublished
-                              ? AppColors.green
-                              : AppColors.orange,
-                          background: k.isPublished
-                              ? AppColors.greenLight
-                              : AppColors.orangeLight,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Ringkasan konfigurasi dan parameter pengerjaan.',
-                      style: TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _InfoTile(
-                          label: 'Mata Pelajaran',
-                          value: m?.mataPelajaran ?? '-',
-                        ),
-                        _InfoTile(label: 'Kategori', value: k.kategori ?? '-'),
-                        _InfoTile(label: 'Tingkat Kesulitan', value: k.level),
-                        _InfoTile(label: 'KKM', value: k.kkm.toString()),
-                        _InfoTile(
-                          label: 'Alokasi Waktu',
-                          value: '${k.waktu} Menit',
-                        ),
-                        _InfoTile(
-                          label: 'Tahun Ajaran',
-                          value: k.tahunAjaran ?? '-',
-                        ),
-                      ],
-                    ),
-                    if ((k.deskripsi ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.purpleLight.withValues(alpha: .35),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'DESKRIPSI / PETUNJUK',
-                              style: TextStyle(
-                                color: AppColors.muted,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: .5,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(k.deskripsi!),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => _hapusKuis(context, app, k),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppColors.red,
-                        ),
-                        icon: const Icon(Icons.delete_outline, size: 16),
-                        label: const Text('Hapus Kuis'),
-                      ),
-                    ),
-                  ]),
-            ),
-            const SizedBox(height: 14),
+            ],
+            const SizedBox(height: 18),
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Materi Terkait',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Informasi Kuis',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w800),
                         ),
+                      ),
+                      AppPill(
+                        label: isDraft ? 'Draft' : 'Terbit',
+                        color: isDraft ? AppColors.orange : AppColors.green,
+                        background: isDraft
+                            ? AppColors.orangeLight
+                            : AppColors.greenLight,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Bab pembelajaran yang dicakup oleh kuis ini.',
-                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                    'Ringkasan konfigurasi dan parameter pengerjaan.',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: AppColors.purpleLight,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.menu_book_rounded,
-                          color: AppColors.purple,
-                          size: 17,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          m == null ? 'Belum terkait materi' : m.judul,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      if (m != null)
-                        Text(
-                          'Bab: ${m.bab}',
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 11,
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final tileWidth = (constraints.maxWidth - 12) / 2;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'Mata Pelajaran',
+                            value: materi?.mataPelajaran ?? '-',
                           ),
-                        ),
-                    ],
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'Kategori',
+                            value: quiz.kategori.isEmpty ? '-' : quiz.kategori,
+                          ),
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'Tingkat Kesulitan',
+                            value: quiz.level,
+                          ),
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'KKM',
+                            value: '${quiz.kkm}',
+                          ),
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'Alokasi Waktu',
+                            value: '${quiz.waktu} Menit',
+                          ),
+                          _InfoTile(
+                            width: tileWidth,
+                            label: 'Tahun Ajaran',
+                            value: quiz.tahunAjaran ?? '-',
+                          ),
+                        ],
+                      );
+                    },
                   ),
+                  if (quiz.deskripsi.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(quiz.deskripsi),
+                  ],
+                  if (isDraft) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppColors.red),
+                        onPressed: () => _hapusKuis(app, quiz),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('Hapus Kuis'),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => _publish(app, quiz),
+                        icon: const Icon(Icons.publish_outlined, size: 16),
+                        label: const Text('Terbitkan Kuis'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 14),
-            SectionTitle('Butir Soal (${k.soal.length})'),
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text(
-                'Pratinjau butir pertanyaan dalam kuis ini.',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
+            if (materi != null) ...[
+              const SizedBox(height: 14),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Materi Terkait',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Bab pembelajaran yang dicakup oleh kuis ini.',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.purpleLight,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.menu_book_rounded,
+                              color: AppColors.purple, size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            materi.judul,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        Text(
+                          materi.bab,
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.muted),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+            ],
+            const SizedBox(height: 14),
+            SectionTitle('Butir Soal (${quiz.soal.length})'),
+            const Text(
+              'Pratinjau butir pertanyaan dalam kuis ini.',
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
-            if (k.soal.isEmpty)
+            const SizedBox(height: 10),
+            if (quiz.soal.isEmpty)
               const EmptyState(text: 'Belum ada soal pada kuis ini.')
             else
-              ...List.generate(k.soal.length, (idx) {
-                final s = k.soal[idx];
+              ...List.generate(quiz.soal.length, (index) {
+                final question = quiz.soal[index];
+                const letters = ['A', 'B', 'C', 'D', 'E'];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AppCard(
                     child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Soal ${idx + 1}',
-                                    style: const TextStyle(
-                                        fontSize: 11, color: AppColors.muted)),
-                                if (s.gambar != null)
-                                  const Text('🖼 bergambar',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.muted)),
-                              ]),
-                          const SizedBox(height: 6),
-                          AppPill(
-                            label: s.jenis,
-                            color: AppColors.blue,
-                            background: AppColors.blueLight,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(s.pertanyaan,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.5)),
-                          if (s.gambar != null) ...[
-                            const SizedBox(height: 8),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.memory(
-                                s.gambar!,
-                                height: 180,
-                                width: double.infinity,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ],
-                          if (s.jenis == Soal.esai)
-                            Text(
-                              'Kunci jawaban: ${s.jawabanEsai}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.green,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Soal ${index + 1} • Bobot ${question.bobot}%',
+                            style: const TextStyle(
+                                fontSize: 11, color: AppColors.muted)),
+                        const SizedBox(height: 6),
+                        AppPill(
+                          label: question.jenis == Soal.esai
+                              ? 'Esai'
+                              : 'Pilihan Ganda',
+                          color: question.jenis == Soal.esai
+                              ? AppColors.purple
+                              : AppColors.blue,
+                          background: question.jenis == Soal.esai
+                              ? AppColors.purpleLight
+                              : AppColors.blueLight,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(question.pertanyaan,
+                            style: const TextStyle(
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          else ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: List.generate(s.opsi.length, (i) {
-                                final benar = i == s.jawaban;
-                                return AppPill(
-                                  label: '${letters[i]}. ${s.opsi[i]}',
-                                  color:
-                                      benar ? AppColors.green : AppColors.muted,
-                                  background: benar
-                                      ? AppColors.greenLight
-                                      : AppColors.bg,
-                                );
-                              }),
+                                height: 1.5)),
+                        if (question.gambar != null ||
+                            question.gambarUrl != null) ...[
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: question.gambar != null
+                                ? Image.memory(
+                                    question.gambar!,
+                                    width: double.infinity,
+                                    height: 180,
+                                    fit: BoxFit.contain,
+                                  )
+                                : Image.network(
+                                    question.gambarUrl!,
+                                    width: double.infinity,
+                                    height: 180,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, error, ___) {
+                                      debugPrint(
+                                        'Gagal memuat gambar soal '
+                                        '${question.gambarUrl}: $error',
+                                      );
+                                      return const SizedBox(
+                                        height: 100,
+                                        child: Center(
+                                          child: Text(
+                                            'Gambar gagal dimuat. Periksa URL dan akses storage publik.',
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        if (question.jenis == Soal.esai)
+                          const Text(
+                            'Pertanyaan bertipe esai',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.muted,
+                              fontStyle: FontStyle.italic,
                             ),
-                          ],
-                          const SizedBox(height: 10),
-                          Row(children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => Navigator.push(
+                          )
+                        else
+                          ...List.generate(question.opsi.length, (optionIndex) {
+                            final isAnswer = optionIndex == question.jawaban;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                '${letters[optionIndex]}. ${question.opsi[optionIndex]}${isAnswer ? '  ✓' : ''}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isAnswer
+                                      ? AppColors.green
+                                      : AppColors.text,
+                                  fontWeight: isAnswer
+                                      ? FontWeight.w700
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            );
+                          }),
+                        if (isDraft) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                        builder: (_) => SoalFormScreen(
-                                            kuisId: k.id, index: idx))),
-                                icon: const Icon(Icons.edit_outlined, size: 16),
-                                label: const Text('Edit Soal',
-                                    style: TextStyle(fontSize: 12)),
+                                      builder: (_) => SoalFormScreen(
+                                          kuisId: quiz.id, index: index),
+                                    ),
+                                  ),
+                                  icon:
+                                      const Icon(Icons.edit_outlined, size: 16),
+                                  label: const Text('Edit'),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.red,
-                                    side: const BorderSide(
-                                        color: AppColors.redLight)),
-                                onPressed: () =>
-                                    _hapusSoal(context, app, k.id, idx),
-                                icon:
-                                    const Icon(Icons.delete_outline, size: 16),
-                                label: const Text('Hapus Soal',
-                                    style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.red),
+                                  onPressed: () => _hapusSoal(app, quiz, index),
+                                  icon: const Icon(Icons.delete_outline,
+                                      size: 16),
+                                  label: const Text('Hapus'),
+                                ),
                               ),
-                            ),
-                          ]),
-                        ]),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 );
               }),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => SoalFormScreen(kuisId: k.id))),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Soal'),
-      ),
+      floatingActionButton: isDraft
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => SoalFormScreen(kuisId: quiz.id)),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Soal'),
+            )
+          : null,
     );
   }
 }
 
 class _InfoTile extends StatelessWidget {
+  final double width;
   final String label;
   final String value;
 
-  const _InfoTile({required this.label, required this.value});
+  const _InfoTile({
+    required this.width,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 142,
+      width: width,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.purpleLight.withValues(alpha: .28),

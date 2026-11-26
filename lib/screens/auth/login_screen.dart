@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
-import '../../models/user.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -23,36 +22,19 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _isiDariAkun(String identifier, String password) {
-    setState(() {
-      identifierCtrl.text = identifier;
-      passCtrl.text = password;
-    });
-  }
+  bool _loading = false;
 
-  void _login() {
-    final app = context.read<AppProvider>();
-    final id = identifierCtrl.text;
-    final pass = passCtrl.text;
-
-    // Role ditentukan otomatis: coba siswa dulu, lalu guru.
-    final errSiswa = app.login(id, pass, UserRole.siswa);
-    if (errSiswa == null) return;
-
-    final errGuru = app.login(id, pass, UserRole.guru);
-    if (errGuru == null) return;
-
-    showAppToast(context, errSiswa);
-    // Navigasi otomatis ditangani oleh AuthGate lewat Consumer<AppProvider>.
+  Future<void> _login() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    final error = await context.read<AppProvider>().login(identifierCtrl.text, passCtrl.text);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (error != null) showAppToast(context, error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    // Hanya akun siswa & guru yang relevan untuk aplikasi mobile ini.
-    final akunDemo = app.users
-        .where((u) => u.role == UserRole.siswa || u.role == UserRole.guru);
-
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
@@ -109,43 +91,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 18),
                           ElevatedButton(
-                              onPressed: _login, child: const Text('Masuk')),
+                              onPressed: _loading ? null : _login,
+                              child: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Masuk')),
                         ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text('Akun Demo',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 12.5)),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Tap salah satu akun untuk mengisi form otomatis. Sandi semua akun: 123456.',
-                      style: TextStyle(fontSize: 11.5, color: AppColors.muted),
-                    ),
-                    const SizedBox(height: 10),
-                    ...akunDemo.map((u) {
-                      final isGuru = u.role == UserRole.guru;
-                      return AppListItem(
-                        icon: isGuru
-                            ? Icons.school_rounded
-                            : Icons.person_rounded,
-                        iconColor: isGuru ? AppColors.green : AppColors.blue,
-                        iconBg:
-                            isGuru ? AppColors.greenLight : AppColors.blueLight,
-                        title: u.nama,
-                        subtitle: u.kelas == null
-                            ? '${u.induk ?? '-'}${isGuru && u.mataPelajaran != null ? ' • ${u.mataPelajaran}' : ''}'
-                            : '${u.induk ?? '-'} • ${u.kelas}',
-                        trailing: AppPill(
-                          label: isGuru ? 'Guru' : 'Siswa',
-                          color: isGuru ? AppColors.green : AppColors.blue,
-                          background: isGuru
-                              ? AppColors.greenLight
-                              : AppColors.blueLight,
-                        ),
-                        onTap: () => _isiDariAkun(u.induk ?? '', u.password),
-                      );
-                    }),
+                    const Text('Gunakan NISN/NIP dan kata sandi akun sekolah Anda.',
+                        style: TextStyle(fontSize: 11.5, color: AppColors.muted)),
                   ],
                 ),
               ),
