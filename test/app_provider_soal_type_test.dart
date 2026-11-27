@@ -44,6 +44,7 @@ void main() {
     expect(fields['opsi_a'], 'A');
     expect(fields['opsi_d'], 'D');
     expect(fields['jawaban'], 'A');
+    expect(fields.containsKey('bobot'), isFalse);
     expect(fields.containsKey('tipe'), isFalse);
     expect(fields.containsKey('tipe_soal'), isFalse);
     expect(files, hasLength(1));
@@ -80,6 +81,7 @@ void main() {
 
     expect(body.containsKey('tipe'), isFalse);
     expect(body.containsKey('tipe_soal'), isFalse);
+    expect(body.containsKey('bobot'), isFalse);
     expect(body['opsi_a'], isNull);
     expect(body['jawaban'], isNull);
     expect(app.kuisList.single.soal.single.jenis, Soal.esai);

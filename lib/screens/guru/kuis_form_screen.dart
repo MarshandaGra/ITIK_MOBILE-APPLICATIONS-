@@ -10,8 +10,15 @@ import 'kuis_detail_screen.dart';
 
 class KuisFormScreen extends StatefulWidget {
   final String? kuisId;
+  final String? initialMapelId;
+  final String? initialMateriId;
 
-  const KuisFormScreen({super.key, this.kuisId});
+  const KuisFormScreen({
+    super.key,
+    this.kuisId,
+    this.initialMapelId,
+    this.initialMateriId,
+  });
 
   @override
   State<KuisFormScreen> createState() => _KuisFormScreenState();
@@ -60,12 +67,12 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
         text: '${existing?.waktu == 0 ? 10 : existing?.waktu ?? 10}');
     _kkmController = TextEditingController(
         text: '${existing?.kkm == 0 ? 75 : existing?.kkm ?? 75}');
-    _idMapel = existing?.idMapel;
+    _idMapel = existing?.idMapel ?? widget.initialMapelId;
     final existingDifficulty = existing?.level.trim().toLowerCase();
     _tingkatKesulitan = _difficultyLevels.contains(existingDifficulty)
         ? existingDifficulty
         : 'mudah';
-    _materiId = existing?.materiId;
+    _materiId = existing?.materiId ?? widget.initialMateriId;
     _idKuisAsal = existing?.idKuisAsal;
     final existingCategory = existing?.kategori.trim().toLowerCase();
     _kategori = _categories.containsKey(existingCategory)
@@ -73,7 +80,7 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
         : 'kuis harian';
     _waktuMulai = existing?.waktuMulai;
     _waktuSelesai = existing?.waktuSelesai;
-    _loadMapelOptions(existing?.idMapel);
+    _loadMapelOptions(_idMapel);
     _loadTahunAjaranAktif();
   }
 
@@ -181,7 +188,9 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
         _tahunAjaranError != null ||
         _tahunAjaranAktif == null) {
       showAppToast(
-          context, 'Data mata pelajaran atau tahun ajaran belum siap.');
+        context,
+        'Data mata pelajaran atau tahun ajaran belum siap.',
+      );
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -403,7 +412,9 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
                           Text(
                             _tahunAjaranError!,
                             style: const TextStyle(
-                                fontSize: 12, color: AppColors.red),
+                              fontSize: 12,
+                              color: AppColors.red,
+                            ),
                           ),
                           TextButton(
                             onPressed: _loadTahunAjaranAktif,
@@ -441,7 +452,7 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
                           : null,
                     ),
                     const SizedBox(height: 14),
-                    _label('Materi Terkait (opsional)'),
+                    _label('Materi Terkait *'),
                     DropdownButtonFormField<String>(
                       initialValue:
                           materiOptions.any((item) => item.id == _materiId)
@@ -454,8 +465,14 @@ class _KuisFormScreenState extends State<KuisFormScreen> {
                                   overflow: TextOverflow.ellipsis)))
                           .toList(),
                       onChanged: (value) => setState(() => _materiId = value),
-                      decoration: const InputDecoration(
-                          hintText: 'Pilih materi terkait'),
+                      decoration: InputDecoration(
+                        hintText: materiOptions.isEmpty
+                            ? 'Belum ada materi untuk mata pelajaran ini'
+                            : 'Pilih materi terkait',
+                      ),
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Materi terkait wajib dipilih.'
+                          : null,
                     ),
                     const SizedBox(height: 14),
                     _label('Kategori *'),

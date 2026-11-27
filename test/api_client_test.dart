@@ -65,4 +65,39 @@ void main() {
 
     api.close();
   });
+
+  test('materi PDF request uses bearer auth and validates the PDF response',
+      () async {
+    final pdfBytes = Uint8List.fromList(utf8.encode('%PDF-1.4\n'));
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, '/api/guru/materi/M001/pdf');
+      expect(request.headers['accept'], 'application/pdf');
+      expect(request.headers['authorization'], 'Bearer test-token');
+      return http.Response.bytes(
+        pdfBytes,
+        200,
+        headers: {'content-type': 'application/pdf'},
+      );
+    });
+    final api = ApiClient(client: client)..token = 'test-token';
+
+    expect(await api.getPdf('/guru/materi/M001/pdf'), pdfBytes);
+    api.close();
+  });
+
+  test('materi PDF request rejects an HTML page instead of a PDF', () async {
+    final client = MockClient((request) async => http.Response(
+          '<html>login</html>',
+          200,
+          headers: {'content-type': 'text/html'},
+        ));
+    final api = ApiClient(client: client);
+
+    await expectLater(
+      api.getPdf('/guru/materi/M001/pdf'),
+      throwsA(isA<FormatException>()),
+    );
+    api.close();
+  });
 }

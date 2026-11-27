@@ -108,42 +108,7 @@ class _KuisResultScreenState extends State<KuisResultScreen> {
               style: const TextStyle(color: AppColors.muted),
             ),
             const SizedBox(height: 16),
-            AppCard(
-              child: Column(
-                children: [
-                  Text(
-                    widget.nilai == null
-                        ? 'Menunggu Penilaian'
-                        : formatSkor(widget.nilai!),
-                    style: TextStyle(
-                      fontSize: widget.nilai == null ? 20 : 36,
-                      fontWeight: FontWeight.w800,
-                      color: lulus ? AppColors.green : AppColors.orange,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  AppPill(
-                    label: lulus
-                        ? 'Lulus'
-                        : widget.resultStatusLabel ??
-                            (widget.nilai == null
-                                ? 'Menunggu Penilaian'
-                                : 'Menunggu Validasi'),
-                    color: lulus ? AppColors.green : AppColors.orange,
-                    background:
-                        lulus ? AppColors.greenLight : AppColors.orangeLight,
-                  ),
-                  const Divider(height: 28),
-                  _metric('KKM', formatSkor(widget.kuis.kkm)),
-                  if (!widget.serverGraded) ...[
-                    const Divider(height: 24),
-                    _metric('Jawaban benar', '${widget.benar}'),
-                    const Divider(height: 24),
-                    _metric('Jawaban salah', '${widget.salah}'),
-                  ],
-                ],
-              ),
-            ),
+            _buildRingkasan(lulus),
             const SizedBox(height: 20),
             _buildEvaluasi(),
             const SizedBox(height: 18),
@@ -162,6 +127,166 @@ class _KuisResultScreenState extends State<KuisResultScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRingkasan(bool lulus) {
+    final future = _evaluasiFuture;
+    if (future == null) {
+      return _ringkasanCard(lulus, _evaluasiLokal());
+    }
+
+    return FutureBuilder<EvaluasiKuis>(
+      future: future,
+      builder: (context, snapshot) => _ringkasanCard(lulus, snapshot.data),
+    );
+  }
+
+  Widget _ringkasanCard(bool lulus, EvaluasiKuis? evaluasi) {
+    final tampilEvaluasi = evaluasi?.tampilEvaluasi ?? false;
+    final jawabanTersedia = evaluasi?.jawabanTersedia ?? true;
+    final dapatMenampilkanJumlah =
+        _evaluasiFuture == null || (tampilEvaluasi && jawabanTersedia);
+    final pilihanGanda = evaluasi?.soal
+        .where((soal) => soal.jenis != Soal.esai && soal.jenis != 'esai')
+        .toList();
+    final benar = tampilEvaluasi
+        ? evaluasi!.jumlahBenar ??
+            pilihanGanda!
+                .where((soal) =>
+                    soal.jawabanBenar != null &&
+                    soal.jawabanDipilih == soal.jawabanBenar)
+                .length
+        : widget.benar;
+    final salah = tampilEvaluasi
+        ? evaluasi!.jumlahSalah ?? pilihanGanda!.length - benar
+        : widget.salah;
+    final totalSoal = evaluasi?.jumlahSoal ??
+        (evaluasi?.soal.isNotEmpty == true
+            ? evaluasi!.soal.length
+            : widget.kuis.jumlahSoal);
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Ringkasan Hasil',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: Column(
+              children: [
+                const Text(
+                  'Nilai Akhir Kamu',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.nilai == null
+                      ? 'Menunggu Penilaian'
+                      : formatSkor(widget.nilai!),
+                  style: TextStyle(
+                    fontSize: widget.nilai == null ? 18 : 36,
+                    fontWeight: FontWeight.w800,
+                    color: lulus ? AppColors.green : AppColors.orange,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                AppPill(
+                  label: lulus
+                      ? 'Lulus (KKM ${formatSkor(widget.kuis.kkm)})'
+                      : widget.resultStatusLabel ??
+                          (widget.nilai == null
+                              ? 'Menunggu Penilaian'
+                              : 'Belum lulus (KKM ${formatSkor(widget.kuis.kkm)})'),
+                  color: lulus ? AppColors.green : AppColors.orange,
+                  background:
+                      lulus ? AppColors.greenLight : AppColors.orangeLight,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  key: const ValueKey('result-correct-count'),
+                  label: 'Jawaban Benar',
+                  value: dapatMenampilkanJumlah ? '$benar' : '—',
+                  color: AppColors.green,
+                  background: AppColors.greenLight,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  key: const ValueKey('result-wrong-count'),
+                  label: 'Jawaban Salah',
+                  value: dapatMenampilkanJumlah ? '$salah' : '—',
+                  color: AppColors.red,
+                  background: AppColors.redLight,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _statCard(
+                  key: const ValueKey('result-total-count'),
+                  label: 'Total Soal',
+                  value: '$totalSoal',
+                  color: AppColors.blue,
+                  background: AppColors.blueLight,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 28),
+          _metric('KKM', formatSkor(widget.kuis.kkm)),
+          const SizedBox(height: 8),
+          _metric('Nama Kuis', widget.kuis.judul),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard({
+    Key? key,
+    required String label,
+    required String value,
+    required Color color,
+    required Color background,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            key: key,
+            style: TextStyle(
+              color: color,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -218,6 +343,14 @@ class _KuisResultScreenState extends State<KuisResultScreen> {
       return const AppCard(
         child: Text(
           'Evaluasi soal belum ditampilkan sesuai pengaturan kuis.',
+          style: TextStyle(color: AppColors.muted),
+        ),
+      );
+    }
+    if (!evaluasi.jawabanTersedia) {
+      return const AppCard(
+        child: Text(
+          'Jawaban pada percobaan ini tidak tersimpan, jadi evaluasi belum bisa ditampilkan.',
           style: TextStyle(color: AppColors.muted),
         ),
       );

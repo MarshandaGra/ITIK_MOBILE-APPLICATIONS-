@@ -84,6 +84,50 @@ class ApiClient {
     return data;
   }
 
+  Future<Uint8List> getPdf(
+    String path, {
+    bool authenticated = true,
+  }) async {
+    final headers = <String, String>{'Accept': 'application/pdf'};
+    if (authenticated && token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    final response = await _client.get(
+      Uri.parse('$baseUrl$path'),
+      headers: headers,
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      String? message;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          message = decoded['message']?.toString();
+        }
+      } on FormatException {
+        // The server may return a non-JSON error page.
+      }
+      throw ApiException(
+        message ?? 'Gagal mengambil PDF (${response.statusCode}).',
+        response.statusCode,
+      );
+    }
+
+    final contentType =
+        response.headers['content-type']?.split(';').first.trim().toLowerCase();
+    if (contentType != 'application/pdf') {
+      throw const FormatException(
+        'Server tidak mengembalikan file PDF.',
+      );
+    }
+
+    final bytes = response.bodyBytes;
+    if (bytes.length < 5 || String.fromCharCodes(bytes.take(5)) != '%PDF-') {
+      throw const FormatException('File yang diterima bukan PDF yang valid.');
+    }
+    return bytes;
+  }
+
   Future<Map<String, dynamic>> multipartRequest(
     String path, {
     required Map<String, String> fields,

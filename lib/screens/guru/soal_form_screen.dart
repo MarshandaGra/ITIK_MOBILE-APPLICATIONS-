@@ -24,7 +24,6 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _imagePicker = ImagePicker();
   late final TextEditingController _questionController;
-  late final TextEditingController _weightController;
   late final List<TextEditingController> _optionControllers;
   Uint8List? _imageBytes;
   String? _imageName;
@@ -49,23 +48,12 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
         TextEditingController(text: existing?.pertanyaan ?? '');
     _optionControllers = List.generate(
         5, (index) => TextEditingController(text: optionAt(index)));
-    _weightController = TextEditingController(
-      text: existing?.bobot.toString() ?? _defaultWeight(quiz),
-    );
     _imageBytes = existing?.gambar;
     _imageName = existing?.gambarNamaFile;
     _imageUrl = existing?.gambarUrl;
     _answer = existing?.jawaban ?? 0;
     _questionType =
         existing?.jenis == Soal.esai ? Soal.esai : Soal.pilihanGanda;
-  }
-
-  String _defaultWeight(Kuis? quiz) {
-    final remaining = 100 -
-        (quiz?.soal
-                .fold<double>(0, (total, question) => total + question.bobot) ??
-            0);
-    return (remaining > 0 ? remaining : 1).toStringAsFixed(2);
   }
 
   Future<void> _pilihGambar() async {
@@ -109,7 +97,6 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
   @override
   void dispose() {
     _questionController.dispose();
-    _weightController.dispose();
     for (final controller in _optionControllers) {
       controller.dispose();
     }
@@ -141,7 +128,6 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
               .map((controller) => controller.text.trim())
               .toList(),
       jawaban: _answer,
-      bobot: double.parse(_weightController.text),
       tingkatKesulitan: isEdit ? quiz.soal[widget.index!].tingkatKesulitan : '',
       gambar: _imageBytes,
       gambarNamaFile: _imageName,
@@ -173,7 +159,6 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
           _imageName = null;
           _imageUrl = null;
           _questionType = Soal.pilihanGanda;
-          _weightController.text = _defaultWeight(quiz);
         });
       }
     } catch (error) {
@@ -407,27 +392,6 @@ class _SoalFormScreenState extends State<SoalFormScreen> {
                         'Jawaban siswa untuk soal esai akan dinilai oleh guru.',
                         style: TextStyle(fontSize: 11, color: AppColors.muted),
                       ),
-                    const SizedBox(height: 14),
-                    _label('Bobot (%) *'),
-                    TextFormField(
-                      controller: _weightController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                          hintText: 'Total bobot seluruh soal harus 100'),
-                      validator: (value) {
-                        final weight = double.tryParse(value ?? '');
-                        if (weight == null || weight <= 0 || weight > 100) {
-                          return 'Bobot harus lebih dari 0 sampai 100.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Total bobot semua soal harus tepat 100 agar kuis dapat dipublikasikan.',
-                      style: TextStyle(fontSize: 11, color: AppColors.muted),
-                    ),
                   ],
                 ),
               ),

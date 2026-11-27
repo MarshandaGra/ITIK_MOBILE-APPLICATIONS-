@@ -45,9 +45,35 @@ class _KuisDetailScreenState extends State<KuisDetailScreen> {
     if (!confirmed || !mounted) return;
     try {
       await app.hapusSoal(quiz.id, index);
-      if (mounted) showAppToast(context, 'Soal berhasil dihapus.');
     } catch (error) {
       if (mounted) showAppToast(context, 'Gagal menghapus soal: $error');
+      return;
+    }
+    if (!mounted) return;
+    showAppToast(context, 'Soal berhasil dihapus.');
+    try {
+      await app.loadKuisDetail(quiz.id);
+    } catch (error) {
+      if (mounted) {
+        showAppToast(context, 'Bobot soal terbaru gagal dimuat: $error');
+      }
+    }
+  }
+
+  Future<void> _bukaFormSoal({int? index}) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SoalFormScreen(kuisId: widget.kuisId, index: index),
+      ),
+    );
+    if (!mounted) return;
+    try {
+      await context.read<AppProvider>().loadKuisDetail(widget.kuisId);
+    } catch (error) {
+      if (mounted) {
+        showAppToast(context, 'Bobot soal terbaru gagal dimuat: $error');
+      }
     }
   }
 
@@ -347,7 +373,8 @@ class _KuisDetailScreenState extends State<KuisDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Soal ${index + 1} • Bobot ${question.bobot}%',
+                        Text(
+                            'Soal ${index + 1} • Bobot: ${question.bobot.toStringAsFixed(2)}%',
                             style: const TextStyle(
                                 fontSize: 11, color: AppColors.muted)),
                         const SizedBox(height: 6),
@@ -438,13 +465,7 @@ class _KuisDetailScreenState extends State<KuisDetailScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => SoalFormScreen(
-                                          kuisId: quiz.id, index: index),
-                                    ),
-                                  ),
+                                  onPressed: () => _bukaFormSoal(index: index),
                                   icon:
                                       const Icon(Icons.edit_outlined, size: 16),
                                   label: const Text('Edit'),
@@ -474,11 +495,7 @@ class _KuisDetailScreenState extends State<KuisDetailScreen> {
       ),
       floatingActionButton: isDraft
           ? FloatingActionButton.extended(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => SoalFormScreen(kuisId: quiz.id)),
-              ),
+              onPressed: _bukaFormSoal,
               icon: const Icon(Icons.add),
               label: const Text('Tambah Soal'),
             )

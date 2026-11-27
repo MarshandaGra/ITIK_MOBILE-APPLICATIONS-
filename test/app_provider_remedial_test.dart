@@ -56,7 +56,7 @@ void main() {
       Kuis(
         id: '',
         judul: 'Remedial Bab 1',
-        materiId: '',
+        materiId: 'M001',
         level: 'mudah',
         oleh: 'Guru',
         tanggal: '',
@@ -70,6 +70,7 @@ void main() {
 
     expect(body['judul'], 'Remedial Bab 1');
     expect(body['id_kuis_asal'], 'K100');
+    expect(body['id_materi'], 'M001');
     expect(saved.id, 'K101');
     expect(saved.idKuisAsal, 'K100');
     expect(app.kuisList.single.id, 'K101');

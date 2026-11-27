@@ -64,6 +64,13 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
+      find.text('Soal 1 • Bobot: 100.00%'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Soal 1 • Bobot: 100.00%'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
       find.text('Esai'),
       300,
       scrollable: find.byType(Scrollable).first,

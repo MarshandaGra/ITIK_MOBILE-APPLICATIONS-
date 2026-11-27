@@ -47,6 +47,7 @@ class Kuis {
   String kategori;
   String deskripsi;
   String? idMapel;
+  String? namaMapel;
   String? idTahunAjaran;
   String? idKuisAsal;
   String statusPublikasi;
@@ -78,6 +79,7 @@ class Kuis {
     this.tanggalTerbit,
     this.tanggalSelesai,
     this.idMapel,
+    this.namaMapel,
     this.idTahunAjaran,
     this.idKuisAsal,
     this.statusPublikasi = 'draft',

@@ -12,7 +12,8 @@ import '../../widgets/shared_widgets.dart';
 /// Form tambah/edit materi. Jika [materiId] diisi -> mode edit.
 class MateriFormScreen extends StatefulWidget {
   final String? materiId;
-  const MateriFormScreen({super.key, this.materiId});
+  final String? initialMapelId;
+  const MateriFormScreen({super.key, this.materiId, this.initialMapelId});
 
   @override
   State<MateriFormScreen> createState() => _MateriFormScreenState();
@@ -45,8 +46,8 @@ class _MateriFormScreenState extends State<MateriFormScreen> {
     kelasCtrl = TextEditingController(text: existing?.kelas ?? 'X TKJ 1');
     deskripsiCtrl = TextEditingController(text: existing?.deskripsi ?? '');
     youtubeCtrl = TextEditingController(text: existing?.linkYoutube ?? '');
-    _idMapel = existing?.idMapel;
-    _loadMapelOptions(existing?.idMapel);
+    _idMapel = existing?.idMapel ?? widget.initialMapelId;
+    _loadMapelOptions(_idMapel);
   }
 
   Future<void> _loadMapelOptions(String? currentId) async {

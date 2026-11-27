@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
+import '../shared/materi_pdf_preview_screen.dart';
 import 'materi_form_screen.dart';
 
 class MateriViewScreen extends StatelessWidget {
@@ -30,11 +31,8 @@ class MateriViewScreen extends StatelessWidget {
               materi.judul,
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '${materi.bab} • ${materi.kelas}',
-              style: const TextStyle(color: AppColors.muted),
-            ),
+            const SizedBox(height: 16),
+            MateriInformationCard(materi: materi),
             const SizedBox(height: 16),
             Container(
               height: 220,
@@ -70,10 +68,17 @@ class MateriViewScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: materi.pdfUrl == null
-                        ? null
-                        : () => openPdfUrl(context, materi.pdfUrl),
-                    icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MateriPdfPreviewScreen(
+                          materi: materi,
+                          pdfEndpoint:
+                              '/guru/materi/${Uri.encodeComponent(materi.id)}/pdf',
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 17),
                     label: const Text('Buka PDF'),
                   ),
                 ),
@@ -111,7 +116,8 @@ class MateriViewScreen extends StatelessWidget {
                       color: AppColors.muted,
                     ),
                   ),
-                  if (materi.isi.isNotEmpty) ...[
+                  if (materi.isi.isNotEmpty &&
+                      !materi.isi.toLowerCase().endsWith('.pdf')) ...[
                     const SizedBox(height: 16),
                     const Text(
                       'Isi Materi',

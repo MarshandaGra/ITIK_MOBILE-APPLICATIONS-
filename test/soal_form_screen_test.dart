@@ -46,7 +46,8 @@ void main() {
           'Opsi A–D wajib diisi, opsi E opsional. Ketuk huruf opsi untuk memilih jawaban benar.'),
       findsOneWidget,
     );
-    expect(find.text('Bobot (%) *'), findsOneWidget);
+    expect(find.text('Bobot Otomatis'), findsNothing);
+    expect(find.text('100.00%'), findsNothing);
     expect(find.text('Tingkat Kesulitan'), findsNothing);
     expect(find.text('Jenis Soal *'), findsOneWidget);
     expect(find.text('Pilihan Ganda'), findsOneWidget);
@@ -57,11 +58,10 @@ void main() {
     final imageTop = tester.getTopLeft(find.text('Gambar Soal (opsional)')).dy;
     final typeTop = tester.getTopLeft(find.text('Jenis Soal *')).dy;
     final optionsTop = tester.getTopLeft(find.text('Pilihan Jawaban')).dy;
-    final weightTop = tester.getTopLeft(find.text('Bobot (%) *')).dy;
     expect(questionTop < imageTop, isTrue);
     expect(imageTop < typeTop, isTrue);
     expect(typeTop < optionsTop, isTrue);
-    expect(optionsTop < weightTop, isTrue);
+    expect(find.byType(TextFormField), findsNWidgets(6));
   });
 
   testWidgets('memilih tipe esai menyembunyikan pilihan jawaban',
@@ -97,7 +97,7 @@ void main() {
     expect(find.text('Pilihan Jawaban'), findsNothing);
     expect(find.text('Jawaban siswa untuk soal esai akan dinilai oleh guru.'),
         findsOneWidget);
-    expect(find.text('Bobot (%) *'), findsOneWidget);
+    expect(find.text('Bobot Otomatis'), findsNothing);
   });
 
   testWidgets('esai tidak tersedia untuk pre-test', (tester) async {

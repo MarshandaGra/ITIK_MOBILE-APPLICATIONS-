@@ -7,6 +7,7 @@ import '../models/user.dart';
 import '../models/materi.dart';
 import '../models/kuis.dart';
 import '../models/hasil_kuis.dart';
+import '../models/kelas_guru.dart';
 import '../models/mapel_option.dart';
 import '../models/tahun_ajaran_option.dart';
 import '../services/api_client.dart';
@@ -16,6 +17,7 @@ class AppProvider extends ChangeNotifier {
   final List<Materi> materiList = <Materi>[];
   final List<Kuis> kuisList = <Kuis>[];
   final List<HasilKuis> hasilList = <HasilKuis>[];
+  final List<KelasGuru> kelasGuruList = <KelasGuru>[];
 
   final Map<String, bool> progress = {};
   final ApiClient api;
@@ -300,21 +302,40 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Materi _materiFromApi(Map<String, dynamic> j) => Materi(
+  Materi _materiFromApi(Map<String, dynamic> j) {
+    final judul = '${j['judul'] ?? ''}';
+    final pdfUrl = _publicUrlFromApi(j['pdf_url'] ?? j['file_url']);
+    final apiPdfName = [
+      j['nama_file_pdf'],
+      j['pdf_name'],
+    ]
+        .map((value) => value?.toString().trim() ?? '')
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+
+    return Materi(
       id: '${j['id_materi']}',
       bab: '${j['bab'] ?? ''}',
-      judul: '${j['judul'] ?? ''}',
-      kelas: '${j['kelas'] ?? ''}',
+      judul: judul,
+      kelas: _namaKelasApi(j) ?? '',
       deskripsi: '${j['deskripsi'] ?? ''}',
       isi: '${j['isi_materi'] ?? j['file_url'] ?? ''}',
       idMapel: j['id_mapel']?.toString(),
+      mataPelajaran: j['mata_pelajaran']?.toString() ??
+          (j['mapel'] is Map
+              ? Map<String, dynamic>.from(j['mapel'] as Map)['nama_mapel']
+                  ?.toString()
+              : null),
       linkYoutube: j['link_youtube']?.toString(),
-      pdfName: '${j['isi_materi'] ?? ''}'.split('/').last,
-      pdfUrl: _publicUrlFromApi(j['pdf_url'] ?? j['file_url']),
+      pdfName: apiPdfName.isNotEmpty
+          ? apiPdfName
+          : (pdfUrl == null || judul.isEmpty ? '' : '$judul.pdf'),
+      pdfUrl: pdfUrl,
       ukuran: '',
       oleh: '${j['user'] is Map ? j['user']['nama_lengkap'] ?? '' : ''}',
       tanggal: '${j['created_at'] ?? ''}',
-      createdAt: DateTime.tryParse('${j['created_at'] ?? ''}'));
+      createdAt: DateTime.tryParse('${j['created_at'] ?? ''}'),
+    );
+  }
 
   Kuis _kuisFromApi(Map<String, dynamic> j) => Kuis(
       id: '${j['id_kuis']}',
@@ -334,6 +355,11 @@ class AppProvider extends ChangeNotifier {
       kategori: '${j['kategori'] ?? 'kuis harian'}',
       deskripsi: '${j['deskripsi'] ?? ''}',
       idMapel: j['id_mapel']?.toString(),
+      namaMapel: j['nama_mapel']?.toString() ??
+          (j['mapel'] is Map
+              ? Map<String, dynamic>.from(j['mapel'] as Map)['nama_mapel']
+                  ?.toString()
+              : null),
       idTahunAjaran: j['id_tahun_ajaran']?.toString(),
       idKuisAsal: j['remedial'] is Map
           ? j['remedial']['id_kuis_asal']?.toString()
@@ -368,6 +394,61 @@ class AppProvider extends ChangeNotifier {
   num? _numberFromApi(dynamic value) {
     if (value is num) return value;
     if (value is String) return num.tryParse(value);
+    return null;
+  }
+
+  String? _namaKelasApi(Map<String, dynamic> json) {
+    String? namaDariMap(dynamic value) {
+      if (value is Map) {
+        final map = Map<String, dynamic>.from(value);
+        for (final key in const [
+          'nama_kelas',
+          'nama',
+          'kelas',
+          'label',
+          'tingkat',
+          'name',
+        ]) {
+          final nama = map[key]?.toString().trim();
+          if (nama != null && nama.isNotEmpty) return nama;
+        }
+      }
+      return null;
+    }
+
+    for (final key in const [
+      'nama_kelas',
+      'kelas_nama',
+      'nama_kelas_detail',
+      'kelas',
+      'kelas_detail',
+      'rombongan_belajar',
+      'rombel',
+      'kelas_siswa',
+    ]) {
+      final mapName = namaDariMap(json[key]);
+      if (mapName != null) return mapName;
+      final value = json[key]?.toString().trim();
+      if (value != null &&
+          value.isNotEmpty &&
+          !value.startsWith('{') &&
+          key != 'kelas_detail') {
+        return value;
+      }
+    }
+
+    for (final relasiKey in const ['materi', 'kuis', 'siswa']) {
+      final relasi = json[relasiKey];
+      if (relasi is Map) {
+        final nama = _namaKelasApi(Map<String, dynamic>.from(relasi));
+        if (nama != null) return nama;
+      } else if (relasi is List) {
+        for (final item in relasi.whereType<Map>()) {
+          final nama = _namaKelasApi(Map<String, dynamic>.from(item));
+          if (nama != null) return nama;
+        }
+      }
+    }
     return null;
   }
 
@@ -558,6 +639,10 @@ class AppProvider extends ChangeNotifier {
 
     return EvaluasiKuis(
       tampilEvaluasi: true,
+      jawabanTersedia: data['jawaban_tersedia'] != false,
+      jumlahBenar: _numberFromApi(data['jumlah_benar'])?.toInt(),
+      jumlahSalah: _numberFromApi(data['jumlah_salah'])?.toInt(),
+      jumlahSoal: _numberFromApi(data['jumlah_soal'])?.toInt(),
       soal: rows.whereType<Map>().map((row) {
         final json = Map<String, dynamic>.from(row);
         final options = [
@@ -651,6 +736,19 @@ class AppProvider extends ChangeNotifier {
     nilaiLoading = true;
     nilaiLoadError = null;
     notifyListeners();
+    final loadErrors = <String>[];
+    try {
+      final kelasResponse = await api.request('/guru/kelas');
+      final classes =
+          _listFromResponse(kelasResponse).map(KelasGuru.fromJson).toList();
+      kelasGuruList
+        ..clear()
+        ..addAll(classes);
+    } catch (error) {
+      loadErrors.add(error.toString());
+      debugPrint('Gagal memuat kelas guru: $error');
+    }
+
     try {
       final rows = await _loadAllPages('/guru/nilai');
       final results = rows.map(_hasilKuisFromApi).toList();
@@ -658,9 +756,10 @@ class AppProvider extends ChangeNotifier {
         ..clear()
         ..addAll(results);
     } catch (error) {
-      nilaiLoadError = error.toString();
+      loadErrors.add(error.toString());
       debugPrint('Gagal memuat nilai guru: $error');
     } finally {
+      nilaiLoadError = loadErrors.isEmpty ? null : loadErrors.join('\n');
       nilaiLoading = false;
       notifyListeners();
     }
@@ -704,6 +803,17 @@ class AppProvider extends ChangeNotifier {
     final siswaJson = json['siswa'] is Map
         ? Map<String, dynamic>.from(json['siswa'] as Map)
         : <String, dynamic>{};
+    final kelas = _namaKelasApi(json) ??
+        _namaKelasApi(siswaJson) ??
+        _namaKelasApi(kuisJson);
+    final kelasRows = siswaJson['kelas_diikuti'];
+    final kelasIds = kelasRows is List
+        ? kelasRows
+            .whereType<Map>()
+            .map((row) => row['id_kelas']?.toString() ?? '')
+            .where((id) => id.isNotEmpty)
+            .toList()
+        : <String>[];
     final kuisId = '${json['id_kuis'] ?? kuisJson['id_kuis'] ?? ''}';
     final kuis = kuisById(kuisId);
     final kkm = _numberFromApi(kuisJson['kkm'] ?? json['kkm'])?.toDouble() ??
@@ -712,6 +822,7 @@ class AppProvider extends ChangeNotifier {
     final validation = '${json['status_validasi'] ?? ''}'.toLowerCase();
     final date = '${json['tanggal'] ?? ''}';
     final category = '${kuisJson['kategori'] ?? kuis?.kategori ?? ''}';
+    final attemptNumber = _numberFromApi(json['percobaan_ke'])?.toInt() ?? 1;
     final remedialRows = json['remedial_siswa'];
     final remedialAssignments = remedialRows is List
         ? remedialRows.whereType<Map>().map(Map<String, dynamic>.from).toList()
@@ -734,8 +845,19 @@ class AppProvider extends ChangeNotifier {
       siswaId:
           '${json['id_user'] ?? siswaJson['id_user'] ?? currentUser?.id ?? ''}',
       siswa: '${siswaJson['nama_lengkap'] ?? currentUser?.nama ?? ''}',
+      kelas: kelas,
+      kelasIds: kelasIds,
       kuisId: kuisId,
       kuis: '${kuisJson['judul'] ?? kuis?.judul ?? 'Kuis'}',
+      idMapel: kuisJson['id_mapel']?.toString() ?? kuis?.idMapel,
+      namaMapel: kuisJson['mapel'] is Map
+          ? Map<String, dynamic>.from(kuisJson['mapel'] as Map)['nama_mapel']
+              ?.toString()
+          : kuis?.namaMapel,
+      kategori: category,
+      percobaanKe: attemptNumber < 1 ? 1 : attemptNumber,
+      totalSoal:
+          _numberFromApi(kuisJson['soal_count'])?.toInt() ?? kuis?.jumlahSoal,
       level: kuis?.level ?? 'Sedang',
       nilai: _numberFromApi(json['nilai'])?.toDouble() ?? 0,
       nilaiMenunggu: json['nilai'] == null,
@@ -980,6 +1102,43 @@ class AppProvider extends ChangeNotifier {
       .where((materi) => _sesuaiMataPelajaranGuru(materi.mataPelajaran))
       .toList();
 
+  List<MapelOption> get siswaMapelOptions {
+    final mapelById = <String, MapelOption>{};
+
+    void addMapel(String? id, String? nama) {
+      final normalizedId = id?.trim() ?? '';
+      if (normalizedId.isEmpty) return;
+
+      final normalizedName = nama?.trim() ?? '';
+      final existing = mapelById[normalizedId];
+      if (existing == null ||
+          (existing.nama == normalizedId && normalizedName.isNotEmpty)) {
+        mapelById[normalizedId] = MapelOption(
+          id: normalizedId,
+          nama: normalizedName.isEmpty ? normalizedId : normalizedName,
+        );
+      }
+    }
+
+    for (final materi in materiList) {
+      addMapel(materi.idMapel, materi.mataPelajaran);
+    }
+    for (final kuis in kuisList) {
+      final materi = materiById(kuis.materiId);
+      addMapel(kuis.idMapel ?? materi?.idMapel,
+          kuis.namaMapel ?? materi?.mataPelajaran);
+    }
+    for (final hasil in hasilList) {
+      final kuis = kuisById(hasil.kuisId);
+      addMapel(
+          hasil.idMapel ?? kuis?.idMapel, hasil.namaMapel ?? kuis?.namaMapel);
+    }
+
+    return mapelById.values.toList()
+      ..sort((first, second) =>
+          first.nama.toLowerCase().compareTo(second.nama.toLowerCase()));
+  }
+
   List<Kuis> get kuisGuruSaatIni {
     final materiIds = materiGuruSaatIni.map((materi) => materi.id).toSet();
     return kuisList.where((kuis) => materiIds.contains(kuis.materiId)).toList();
@@ -1064,7 +1223,8 @@ class AppProvider extends ChangeNotifier {
     if (data == null) return null;
     if (data is! Map<String, dynamic>) {
       throw const FormatException(
-          'Respons API tahun ajaran aktif tidak valid.');
+        'Respons API tahun ajaran aktif tidak valid.',
+      );
     }
     return TahunAjaranOption.fromJson(data);
   }
@@ -1152,6 +1312,7 @@ class AppProvider extends ChangeNotifier {
               'judul': kuis.judul,
               'deskripsi': kuis.deskripsi.isEmpty ? null : kuis.deskripsi,
               'id_kuis_asal': kuis.idKuisAsal,
+              'id_materi': kuis.materiId,
               'alokasi_waktu': kuis.waktu,
               'kkm': kuis.kkm,
             }
@@ -1351,7 +1512,6 @@ class AppProvider extends ChangeNotifier {
       'opsi_d': optionAt(3),
       'opsi_e': optionAt(4),
       'jawaban': soal.jenis == Soal.esai ? null : letters[soal.jawaban],
-      'bobot': soal.bobot,
       'tingkat_kesulitan':
           soal.tingkatKesulitan.isEmpty ? null : soal.tingkatKesulitan,
     };

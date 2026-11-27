@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/kuis.dart';
-import '../../models/user.dart';
+import '../../models/mapel_option.dart';
+import '../../models/materi.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'kuis_form_screen.dart';
@@ -21,245 +22,328 @@ class _KuisKelolaScreenState extends State<KuisKelolaScreen> {
   static const _semuaKategori = 'Semua';
   String _kategoriFilter = _semuaKategori;
   _StatusFilter _statusFilter = _StatusFilter.semua;
+  List<MapelOption> _mapelOptions = [];
+  String? _selectedMapelId;
+  String? _mapelError;
+  bool _loadingMapel = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMapelOptions();
+  }
+
+  Future<void> _loadMapelOptions() async {
+    setState(() {
+      _loadingMapel = true;
+      _mapelError = null;
+    });
+    try {
+      final options = await context.read<AppProvider>().loadMapelOptions();
+      if (!mounted) return;
+      setState(() {
+        _mapelOptions = options;
+        if (!options.any((mapel) => mapel.id == _selectedMapelId)) {
+          _selectedMapelId = null;
+        }
+        _loadingMapel = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _mapelError = 'Gagal memuat mata pelajaran: $error';
+        _loadingMapel = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final list = app.kuisList;
-    final subject = app.currentUser?.mataPelajaran ?? MataPelajaranGuru.tik;
-    final subjectLabel = subject == MataPelajaranGuru.tik
-        ? 'Teknologi Informasi dan Komunikasi (TIK)'
-        : subject;
-    final subjectCode =
-        subject == MataPelajaranGuru.bahasaIndonesia ? 'MP002' : 'MP001';
+    final selectedMapel = _mapelOptions
+        .where((mapel) => mapel.id == _selectedMapelId)
+        .firstOrNull;
+    final materi = selectedMapel == null
+        ? <Materi>[]
+        : app.materiList
+            .where((item) => item.idMapel == selectedMapel.id)
+            .toList();
+
+    return Scaffold(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadMapelOptions,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+            children: [
+              if (selectedMapel == null)
+                _buildMapelPicker(app)
+              else
+                _buildMapelContents(selectedMapel, materi, app),
+              const SizedBox(height: 12),
+              const Text(
+                'ITIK · Portal Guru — Media Pembelajaran TIK',
+                style: TextStyle(color: AppColors.muted, fontSize: 11.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: selectedMapel == null
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: AppColors.purple,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      KuisFormScreen(initialMapelId: selectedMapel.id),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Kuis'),
+            ),
+    );
+  }
+
+  Widget _buildMapelPicker(AppProvider app) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Kuis & Soal',
+                style: TextStyle(
+                  color: AppColors.text,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Muat ulang mata pelajaran',
+              onPressed: _loadingMapel ? null : _loadMapelOptions,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Pilih mata pelajaran untuk membuat atau mengelola kuis dan soal.',
+          style: TextStyle(color: AppColors.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 20),
+        if (_loadingMapel) const LinearProgressIndicator(),
+        if (_mapelError != null) ...[
+          Text(
+            _mapelError!,
+            style: const TextStyle(color: AppColors.red, fontSize: 13),
+          ),
+          TextButton(
+            onPressed: _loadingMapel ? null : _loadMapelOptions,
+            child: const Text('Coba lagi'),
+          ),
+        ],
+        if (!_loadingMapel && _mapelOptions.isEmpty && _mapelError == null)
+          const EmptyState(text: 'Belum ada mata pelajaran yang tersedia.'),
+        if (_mapelOptions.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Wrap(
+                runSpacing: 14,
+                children: _mapelOptions.map((mapel) {
+                  final materiCount = app.materiList
+                      .where((item) => item.idMapel == mapel.id)
+                      .length;
+                  final quizCount = _quizzesForMapel(mapel, app).length;
+                  return SizedBox(
+                    width: constraints.maxWidth,
+                    child: SubjectSelectionCard(
+                      mapel: mapel,
+                      detail: '$materiCount Materi • $quizCount Kuis',
+                      icon: Icons.quiz_rounded,
+                      onTap: () => setState(() {
+                        _selectedMapelId = mapel.id;
+                        _kategoriFilter = _semuaKategori;
+                        _statusFilter = _StatusFilter.semua;
+                      }),
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMapelContents(
+    MapelOption mapel,
+    List<Materi> materi,
+    AppProvider app,
+  ) {
+    final kuisMapel = _quizzesForMapel(mapel, app);
     final kategoriKuisOptions =
-        list.map((kuis) => kuis.kategori).toSet().toList()..sort();
-    final kuisKategori = list
+        kuisMapel.map((kuis) => kuis.kategori).toSet().toList()..sort();
+    final kuisKategori = kuisMapel
         .where((kuis) =>
             _kategoriFilter == _semuaKategori ||
             kuis.kategori == _kategoriFilter)
         .toList();
     final kuisTerfilter = kuisKategori.where((kuis) {
-      final cocokStatus = switch (_statusFilter) {
+      return switch (_statusFilter) {
         _StatusFilter.semua => true,
         _StatusFilter.terbit => kuis.isPublished,
         _StatusFilter.draft => !kuis.isPublished,
       };
-      return cocokStatus;
     }).toList();
     final groupedList = <String, List<Kuis>>{};
     for (final kuis in kuisTerfilter) {
-      final materi = app.materiById(kuis.materiId);
-      final groupName = materi == null
+      final materiTerkait = app.materiById(kuis.materiId);
+      final groupName = materiTerkait == null
           ? 'Belum terkait materi'
-          : '${materi.bab} — ${materi.judul}';
+          : '${materiTerkait.bab} — ${materiTerkait.judul}';
       groupedList.putIfAbsent(groupName, () => []).add(kuis);
     }
 
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-          children: [
-            const Text(
-              'PORTAL GURU',
-              style: TextStyle(
-                color: AppColors.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.4,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Kuis & Soal',
-              style: TextStyle(
-                color: AppColors.text,
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Kelola kuis mata pelajaran: $subjectLabel',
-              style: const TextStyle(color: AppColors.muted, fontSize: 14),
-            ),
-            const SizedBox(height: 18),
-            _SubjectSummaryBanner(
-              subject: subjectLabel,
-              quizCount: list.length,
-              code: subjectCode,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE8EDF3)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _kategoriFilter,
-                  isExpanded: true,
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _kategoriFilter = value);
-                    }
-                  },
-                  selectedItemBuilder: (context) => [
-                    const _FilterLabel(value: _semuaKategori),
-                    ...kategoriKuisOptions
-                        .map((value) => _FilterLabel(value: value)),
-                  ],
-                  items: [
-                    const DropdownMenuItem(
-                        value: _semuaKategori, child: Text(_semuaKategori)),
-                    ...kategoriKuisOptions.map((value) =>
-                        DropdownMenuItem(value: value, child: Text(value))),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _StatusFilterChip(
-                  label: 'Semua',
-                  count: kuisKategori.length,
-                  selected: _statusFilter == _StatusFilter.semua,
-                  selectedColor: AppColors.blue,
-                  backgroundColor: AppColors.blueLight,
-                  foregroundColor: AppColors.blue,
-                  onSelected: () =>
-                      setState(() => _statusFilter = _StatusFilter.semua),
-                ),
-                _StatusFilterChip(
-                  label: 'Terbit',
-                  count: kuisKategori.where((kuis) => kuis.isPublished).length,
-                  selected: _statusFilter == _StatusFilter.terbit,
-                  selectedColor: AppColors.green,
-                  backgroundColor: AppColors.greenLight,
-                  foregroundColor: AppColors.green,
-                  onSelected: () =>
-                      setState(() => _statusFilter = _StatusFilter.terbit),
-                ),
-                _StatusFilterChip(
-                  label: 'Draft',
-                  count: kuisKategori.where((kuis) => !kuis.isPublished).length,
-                  selected: _statusFilter == _StatusFilter.draft,
-                  selectedColor: AppColors.red,
-                  backgroundColor: AppColors.redLight,
-                  foregroundColor: AppColors.red,
-                  onSelected: () =>
-                      setState(() => _statusFilter = _StatusFilter.draft),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            SectionTitle('Kuis (${kuisTerfilter.length})'),
-            if (kuisTerfilter.isEmpty)
-              const EmptyState(
-                  text:
-                      'Belum ada kuis yang dibuat.\nTekan tombol di bawah untuk membuat kuis pertama.')
-            else
-              ...groupedList.entries.expand((entry) => [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10, top: 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          AppPill(
-                            label: '${entry.value.length} kuis',
-                            color: AppColors.purple,
-                            background: AppColors.purpleLight,
-                          ),
-                        ],
-                      ),
-                    ),
-                    ...entry.value.map(
-                      (kuis) => _KuisManageCard(kuis: kuis, app: app),
-                    ),
-                  ]),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MapelBackButton(
+          onPressed: () => setState(() {
+            _selectedMapelId = null;
+            _kategoriFilter = _semuaKategori;
+            _statusFilter = _StatusFilter.semua;
+          }),
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AppColors.purple,
-        onPressed: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const KuisFormScreen())),
-        icon: const Icon(Icons.add),
-        label: const Text('Tambahkan Kuis'),
-      ),
-    );
-  }
-}
-
-class _SubjectSummaryBanner extends StatelessWidget {
-  final String subject;
-  final int quizCount;
-  final String code;
-
-  const _SubjectSummaryBanner({
-    required this.subject,
-    required this.quizCount,
-    required this.code,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7057F5), Color(0xFF5B43E5)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
+        const SizedBox(height: 10),
+        SubjectSummaryBanner(
+          title: mapel.nama,
+          detail: '${materi.length} materi • ${kuisMapel.length} kuis',
         ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  subject,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$quizCount kuis tersedia • Kode: $code',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+        const SizedBox(height: 14),
+        SectionTitle('Kuis & Soal (${kuisTerfilter.length})'),
+        if (kuisMapel.isNotEmpty) ...[
+          Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE8EDF3)),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _kategoriFilter,
+                isExpanded: true,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _kategoriFilter = value);
+                  }
+                },
+                selectedItemBuilder: (context) => [
+                  const _FilterLabel(value: _semuaKategori),
+                  ...kategoriKuisOptions
+                      .map((value) => _FilterLabel(value: value)),
+                ],
+                items: [
+                  const DropdownMenuItem(
+                      value: _semuaKategori, child: Text(_semuaKategori)),
+                  ...kategoriKuisOptions.map((value) =>
+                      DropdownMenuItem(value: value, child: Text(value))),
+                ],
+              ),
             ),
           ),
-          const Icon(Icons.menu_book_rounded, color: Colors.white70),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusFilterChip(
+                label: 'Semua',
+                count: kuisKategori.length,
+                selected: _statusFilter == _StatusFilter.semua,
+                selectedColor: AppColors.blue,
+                backgroundColor: AppColors.blueLight,
+                foregroundColor: AppColors.blue,
+                onSelected: () =>
+                    setState(() => _statusFilter = _StatusFilter.semua),
+              ),
+              _StatusFilterChip(
+                label: 'Terbit',
+                count: kuisKategori.where((kuis) => kuis.isPublished).length,
+                selected: _statusFilter == _StatusFilter.terbit,
+                selectedColor: AppColors.green,
+                backgroundColor: AppColors.greenLight,
+                foregroundColor: AppColors.green,
+                onSelected: () =>
+                    setState(() => _statusFilter = _StatusFilter.terbit),
+              ),
+              _StatusFilterChip(
+                label: 'Draft',
+                count: kuisKategori.where((kuis) => !kuis.isPublished).length,
+                selected: _statusFilter == _StatusFilter.draft,
+                selectedColor: AppColors.red,
+                backgroundColor: AppColors.redLight,
+                foregroundColor: AppColors.red,
+                onSelected: () =>
+                    setState(() => _statusFilter = _StatusFilter.draft),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
         ],
-      ),
+        if (kuisTerfilter.isEmpty)
+          EmptyState(
+            text: kuisMapel.isEmpty
+                ? 'Belum ada kuis untuk mata pelajaran ini.\nTekan tombol Tambah Kuis untuk membuat kuis.'
+                : 'Tidak ada kuis yang sesuai dengan filter.',
+          )
+        else
+          ...groupedList.entries.expand((entry) => [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10, top: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry.key,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      AppPill(
+                        label: '${entry.value.length} kuis',
+                        color: AppColors.purple,
+                        background: AppColors.purpleLight,
+                      ),
+                    ],
+                  ),
+                ),
+                ...entry.value.map(
+                  (kuis) => _KuisManageCard(kuis: kuis, app: app),
+                ),
+              ]),
+      ],
     );
+  }
+
+  List<Kuis> _quizzesForMapel(MapelOption mapel, AppProvider app) {
+    return app.kuisList.where((kuis) {
+      final materi = app.materiById(kuis.materiId);
+      return materi == null
+          ? kuis.idMapel == mapel.id
+          : materi.idMapel == mapel.id;
+    }).toList();
   }
 }
 

@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:itik_mobile/models/kuis.dart';
 import 'package:itik_mobile/providers/app_provider.dart';
 import 'package:itik_mobile/screens/siswa/kuis_result_screen.dart';
+import 'package:itik_mobile/services/api_client.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,4 +64,105 @@ void main() {
     expect(find.text('Kunci Jawaban'), findsNWidgets(2));
     expect(find.text('Pilihan Kamu'), findsOneWidget);
   });
+
+  testWidgets('ringkasan hasil memakai jumlah dari evaluasi server',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final app = AppProvider(
+      apiClient: ApiClient(
+        client: _RecordingClient((request) async => http.StreamedResponse(
+              Stream.value(utf8.encode(jsonEncode({
+                'data': {
+                  'tampil_evaluasi': true,
+                  'jumlah_benar': 1,
+                  'jumlah_salah': 1,
+                  'jumlah_soal': 2,
+                  'soal': [
+                    {
+                      'pertanyaan': 'Soal benar',
+                      'tipe_soal': 'pilihan_ganda',
+                      'opsi_a': 'A',
+                      'opsi_b': 'B',
+                      'jawaban_benar': 'A',
+                      'jawaban_dipilih': 'A',
+                      'bobot': 50,
+                    },
+                    {
+                      'pertanyaan': 'Soal salah',
+                      'tipe_soal': 'pilihan_ganda',
+                      'opsi_a': 'A',
+                      'opsi_b': 'B',
+                      'jawaban_benar': 'A',
+                      'jawaban_dipilih': 'B',
+                      'bobot': 50,
+                    },
+                  ],
+                },
+              }))),
+              200,
+              request: request,
+            )),
+      ),
+    );
+    addTearDown(app.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: app,
+        child: MaterialApp(
+          home: KuisResultScreen(
+            kuis: Kuis(
+              id: 'K002',
+              judul: 'Kuis Internet',
+              materiId: '',
+              level: 'sedang',
+              oleh: 'Guru',
+              tanggal: '',
+              waktu: 10,
+              kkm: 75,
+              soal: const [],
+              soalCount: 2,
+            ),
+            nilai: 50,
+            benar: 0,
+            salah: 2,
+            jawabanSiswa: const [],
+            attemptId: '51',
+            serverGraded: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('result-correct-count')))
+            .data,
+        '1');
+    expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('result-wrong-count')))
+            .data,
+        '1');
+    expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('result-total-count')))
+            .data,
+        '2');
+  });
+}
+
+class _RecordingClient extends http.BaseClient {
+  _RecordingClient(this.handler);
+
+  final Future<http.StreamedResponse> Function(http.BaseRequest request)
+      handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      handler(request);
+
+  @override
+  void close() {}
 }

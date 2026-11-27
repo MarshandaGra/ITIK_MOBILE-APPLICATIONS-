@@ -2,18 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/hasil_kuis.dart';
+import '../../models/kuis.dart';
+import '../../models/mapel_option.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/shared_widgets.dart';
 import 'kuis_play_screen.dart';
 import 'kuis_result_screen.dart';
 
-class SiswaNilaiScreen extends StatelessWidget {
+class SiswaNilaiScreen extends StatefulWidget {
   const SiswaNilaiScreen({super.key});
+
+  @override
+  State<SiswaNilaiScreen> createState() => _SiswaNilaiScreenState();
+}
+
+class _SiswaNilaiScreenState extends State<SiswaNilaiScreen> {
+  String? _selectedMapelId;
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final list = app.riwayatSiswaSaatIni;
+    final counts = <String, int>{};
+    for (final hasil in list) {
+      final idMapel = _mapelIdForResult(app, hasil);
+      if (idMapel != null && idMapel.isNotEmpty) {
+        counts.update(idMapel, (count) => count + 1, ifAbsent: () => 1);
+      }
+    }
+    final mapelOptions = app.siswaMapelOptions
+        .where((mapel) => (counts[mapel.id] ?? 0) > 0)
+        .toList();
+    MapelOption? selectedMapel;
+    for (final mapel in mapelOptions) {
+      if (mapel.id == _selectedMapelId) {
+        selectedMapel = mapel;
+        break;
+      }
+    }
+    final selectedMapelValue = selectedMapel;
+    final visibleResults = selectedMapelValue == null
+        ? const <HasilKuis>[]
+        : list
+            .where((hasil) =>
+                _mapelIdForResult(app, hasil) == selectedMapelValue.id)
+            .toList();
 
     return Scaffold(
       appBar: simpleAppBar('Nilai & Riwayat Kuis'),
@@ -58,12 +91,56 @@ class SiswaNilaiScreen extends StatelessWidget {
                       text:
                           'Belum ada riwayat kuis.\nYuk kerjakan kuis pertamamu!'),
                 ),
-              ...list.map((hasil) => _HasilCard(hasil: hasil, app: app)),
+              if (!app.nilaiLoading &&
+                  list.isNotEmpty &&
+                  selectedMapel == null) ...[
+                const Text(
+                  'Pilih mata pelajaran untuk melihat nilai dan riwayat kuis.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+                ),
+                const SizedBox(height: 14),
+                MapelSelectionList(
+                  mapelOptions: mapelOptions,
+                  counts: counts,
+                  itemLabel: 'hasil kuis',
+                  icon: Icons.bar_chart_rounded,
+                  iconColor: AppColors.green,
+                  iconBackground: AppColors.greenLight,
+                  detailBuilder: (_, count) => '$count Hasil Kuis',
+                  onSelect: (mapel) =>
+                      setState(() => _selectedMapelId = mapel.id),
+                ),
+              ],
+              if (selectedMapel != null) ...[
+                MapelBackButton(
+                  onPressed: () => setState(() => _selectedMapelId = null),
+                ),
+                const SizedBox(height: 10),
+                SubjectSummaryBanner(
+                  title: selectedMapel.nama,
+                  detail: '${visibleResults.length} hasil kuis tersedia',
+                ),
+                const SizedBox(height: 14),
+                if (visibleResults.isEmpty)
+                  const EmptyState(
+                    text: 'Belum ada riwayat kuis untuk mata pelajaran ini.',
+                  )
+                else
+                  ...visibleResults
+                      .map((hasil) => _HasilCard(hasil: hasil, app: app)),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  String? _mapelIdForResult(AppProvider app, HasilKuis hasil) {
+    final kuis = app.kuisById(hasil.kuisId);
+    return hasil.idMapel ??
+        kuis?.idMapel ??
+        app.materiById(kuis?.materiId ?? '')?.idMapel;
   }
 }
 
@@ -74,12 +151,26 @@ class _HasilCard extends StatelessWidget {
 
   // BARU: buka detail hasil (KuisResultScreen) dari riwayat
   void _lihatDetail(BuildContext context) {
-    final kuis = app.kuisById(hasil.kuisId);
-    if (kuis == null) {
-      showAppToast(context, 'Data kuis tidak ditemukan');
-      return;
-    }
-    final salah = kuis.soal.length - hasil.benar;
+    final kuis = app.kuisById(hasil.kuisId) ??
+        Kuis(
+          id: hasil.kuisId,
+          judul: hasil.kuis,
+          materiId: '',
+          level: hasil.level.toLowerCase(),
+          oleh: '',
+          tanggal: hasil.tanggal,
+          waktu: 0,
+          kkm: hasil.kkm.round(),
+          soal: const [],
+          kategori: hasil.kategori,
+          idMapel: hasil.idMapel,
+          namaMapel: hasil.namaMapel,
+          statusPublikasi: 'terbit',
+          soalCount: hasil.totalSoal,
+        );
+    final salah = ((hasil.totalSoal ?? kuis.jumlahSoal) - hasil.benar)
+        .clamp(0, 1 << 30)
+        .toInt();
     Navigator.push(
       context,
       MaterialPageRoute(

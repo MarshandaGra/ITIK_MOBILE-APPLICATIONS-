@@ -11,8 +11,15 @@ class HasilKuis {
   final String id;
   final String siswaId;
   final String siswa;
+  final String? kelas;
+  final List<String> kelasIds;
   final String kuisId;
   final String kuis;
+  final String? idMapel;
+  final String? namaMapel;
+  final String kategori;
+  final int percobaanKe;
+  final int? totalSoal;
   final String level;
   double nilai;
   bool nilaiMenunggu;
@@ -35,8 +42,15 @@ class HasilKuis {
     required this.id,
     required this.siswaId,
     required this.siswa,
+    this.kelas,
+    this.kelasIds = const [],
     required this.kuisId,
     required this.kuis,
+    this.idMapel,
+    this.namaMapel,
+    this.kategori = '',
+    this.percobaanKe = 1,
+    this.totalSoal,
     required this.level,
     required this.nilai,
     this.nilaiMenunggu = false,
@@ -72,11 +86,19 @@ class HasilPengumpulanKuis {
 
 class EvaluasiKuis {
   final bool tampilEvaluasi;
+  final bool jawabanTersedia;
   final List<EvaluasiSoal> soal;
+  final int? jumlahBenar;
+  final int? jumlahSalah;
+  final int? jumlahSoal;
 
   const EvaluasiKuis({
     required this.tampilEvaluasi,
     required this.soal,
+    this.jawabanTersedia = true,
+    this.jumlahBenar,
+    this.jumlahSalah,
+    this.jumlahSoal,
   });
 }
 

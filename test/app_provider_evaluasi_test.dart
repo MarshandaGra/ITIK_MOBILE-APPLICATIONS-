@@ -116,6 +116,30 @@ void main() {
     expect(evaluation.tampilEvaluasi, isFalse);
     expect(evaluation.soal, isEmpty);
   });
+
+  test('membedakan riwayat lama yang tidak menyimpan jawaban', () async {
+    final app = AppProvider(
+      apiClient: ApiClient(
+        client: _RecordingClient(
+          (request) async => _jsonResponse(request, {
+            'data': {
+              'tampil_evaluasi': true,
+              'jawaban_tersedia': false,
+              'jumlah_soal': 2,
+              'soal': [],
+            },
+          }),
+        ),
+      ),
+    );
+    addTearDown(app.dispose);
+
+    final evaluation = await app.loadEvaluasiSoal('44');
+
+    expect(evaluation.tampilEvaluasi, isTrue);
+    expect(evaluation.jawabanTersedia, isFalse);
+    expect(evaluation.soal, isEmpty);
+  });
 }
 
 http.StreamedResponse _jsonResponse(
